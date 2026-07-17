@@ -15,6 +15,7 @@
     ├── graph.py                    # LangGraph 节点和边
     ├── state.py                    # 图状态定义
     ├── collectors.py               # 数据采集层
+    ├── bilibili_collector.py       # 哔哩哔哩公开数据采集
     ├── analytics.py                # 规则分析层
     ├── reporting.py                # 报告渲染
     ├── llm.py                      # 可选 LLM 润色
@@ -33,6 +34,7 @@
 ## 设计原则
 
 - 数据采集、指标计算、内容分析和报告生成分层，便于替换真实平台数据源。
+- `collect_data` 当前支持 `json` mock 数据和 `bilibili` 真实数据源。
 - 默认不依赖 LLM 也能输出稳定报告。
 - LLM 只做报告润色或高级归纳，不负责不可验证的原始数据计算。
 - 所有秘钥只从环境变量读取，不写入源码和文档。

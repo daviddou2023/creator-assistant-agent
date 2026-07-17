@@ -26,6 +26,18 @@ python demo.py --video-id demo-video-001 --days 7 --reports-dir reports
 python demo.py --output reports/manual/report.md
 ```
 
+使用哔哩哔哩真实数据源：
+
+```bash
+python demo.py --platform bilibili --video-id BV1xx411c7mD --days 30 --max-comments 20 --top-liked-comments 5
+```
+
+单独测试 B 站采集器：
+
+```bash
+python test/test_bilibili_collector.py --bvid BV1xx411c7mD --days 30 --max-comments 10 --top-liked-comments 5
+```
+
 如需启用 LLM 润色，请先在本地 `.env` 配置对应 API Key，例如 `DEEPSEEK_API_KEY`，然后运行：
 
 ```bash

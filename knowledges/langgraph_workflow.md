@@ -50,7 +50,7 @@ flowchart LR
 
 | 节点 | 函数 | 输入 | 输出 | 说明 |
 | --- | --- | --- | --- | --- |
-| `collect_data` | `collect_data_node` | `video_id`, `source_path`, `days_after_publish` | `raw_data` | 从本地 JSON 数据源读取指定视频，并按发布后的天数过滤指标快照和评论。 |
+| `collect_data` | `collect_data_node` | `video_id`, `source_path`, `platform`, `days_after_publish`, `max_comments` | `raw_data` | 从 JSON mock 数据或哔哩哔哩公开数据源读取指定视频，并按发布后的天数过滤指标快照和评论。 |
 | `summarize_metrics` | `summarize_metrics_node` | `raw_data` | `metrics_summary` | 计算阅读量、点赞量、转发量、评论量、互动率和增长量。 |
 | `analyze_comments` | `analyze_comments_node` | `raw_data` | `comment_insights` | 提取评论情绪、高频关键词、高频问题和代表性评论。 |
 | `infer_content` | `infer_content_node` | `raw_data`, `comment_insights` | `content_insights` | 根据标题、描述和评论判断观众关注的选题与呈现方式。 |

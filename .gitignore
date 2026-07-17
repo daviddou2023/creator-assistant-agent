@@ -7,3 +7,4 @@ __pycache__/
 *.py[cod]
 reports/
 local_data/
+test/output/

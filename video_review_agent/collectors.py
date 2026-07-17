@@ -7,6 +7,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from video_review_agent.bilibili_collector import collect_bilibili_video_data
+
 
 def load_json_source(source_path: str) -> dict[str, Any]:
     path = Path(source_path)
@@ -15,8 +17,26 @@ def load_json_source(source_path: str) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def collect_video_data(video_id: str, source_path: str, days_after_publish: int) -> dict[str, Any]:
-    """Load one video record and keep snapshots/comments in the requested time window."""
+def collect_video_data(
+    video_id: str,
+    source_path: str,
+    days_after_publish: int,
+    platform: str = "json",
+    max_comments: int = 50,
+    top_liked_comments_limit: int = 5,
+) -> dict[str, Any]:
+    """Collect one video record from JSON mock data or a real platform."""
+
+    if platform == "bilibili":
+        return collect_bilibili_video_data(
+            video_id=video_id,
+            days_after_publish=days_after_publish,
+            max_comments=max_comments,
+            top_liked_comments_limit=top_liked_comments_limit,
+        )
+
+    if platform != "json":
+        raise ValueError(f"Unsupported platform: {platform}")
 
     payload = load_json_source(source_path)
     videos = payload.get("videos", [])

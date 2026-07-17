@@ -3,6 +3,7 @@
 Run examples:
     python demo.py
     python demo.py --video-id demo-video-001 --days 7
+    python demo.py --platform bilibili --video-id BV1xx411c7mD --days 30
     python demo.py --source data/sample_video_metrics.json --reports-dir reports
 """
 
@@ -20,11 +21,24 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Generate a short-video traffic review report.")
     parser.add_argument("--video-id", default="demo-video-001", help="Video id to review.")
     parser.add_argument(
+        "--platform",
+        choices=["json", "bilibili"],
+        default="json",
+        help="Data source platform.",
+    )
+    parser.add_argument(
         "--source",
         default="data/sample_video_metrics.json",
         help="JSON data source path. Replace this with a platform collector later.",
     )
     parser.add_argument("--days", type=int, default=7, help="Days after publish to include.")
+    parser.add_argument("--max-comments", type=int, default=50, help="Maximum comments to collect.")
+    parser.add_argument(
+        "--top-liked-comments",
+        type=int,
+        default=5,
+        help="Number of top-liked Bilibili comments to record.",
+    )
     parser.add_argument(
         "--reports-dir",
         default="reports",
@@ -49,6 +63,9 @@ def main() -> None:
         video_id=args.video_id,
         source_path=args.source,
         days_after_publish=args.days,
+        platform=args.platform,
+        max_comments=args.max_comments,
+        top_liked_comments_limit=args.top_liked_comments,
         use_llm=args.use_llm,
     )
 

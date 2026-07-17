@@ -8,7 +8,10 @@ from typing import Any, TypedDict
 class VideoReviewState(TypedDict, total=False):
     video_id: str
     source_path: str
+    platform: str
     days_after_publish: int
+    max_comments: int
+    top_liked_comments_limit: int
     use_llm: bool
 
     raw_data: dict[str, Any]

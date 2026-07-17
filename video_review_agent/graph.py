@@ -39,6 +39,9 @@ def run_video_review(
     video_id: str,
     source_path: str = "data/sample_video_metrics.json",
     days_after_publish: int = 7,
+    platform: str = "json",
+    max_comments: int = 50,
+    top_liked_comments_limit: int = 5,
     use_llm: bool = False,
 ) -> VideoReviewState:
     app = build_graph()
@@ -46,7 +49,10 @@ def run_video_review(
         {
             "video_id": video_id,
             "source_path": source_path,
+            "platform": platform,
             "days_after_publish": days_after_publish,
+            "max_comments": max_comments,
+            "top_liked_comments_limit": top_liked_comments_limit,
             "use_llm": use_llm,
             "errors": [],
         }
@@ -58,6 +64,9 @@ def collect_data_node(state: VideoReviewState) -> VideoReviewState:
         video_id=state["video_id"],
         source_path=state.get("source_path", "data/sample_video_metrics.json"),
         days_after_publish=state.get("days_after_publish", 7),
+        platform=state.get("platform", "json"),
+        max_comments=state.get("max_comments", 50),
+        top_liked_comments_limit=state.get("top_liked_comments_limit", 5),
     )
     return {"raw_data": raw_data}
 

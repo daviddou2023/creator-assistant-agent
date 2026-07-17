@@ -16,6 +16,7 @@ def render_markdown_report(state: dict[str, Any]) -> str:
     hot_keywords = _format_pairs(comments.get("hot_keywords", []))
     signals = _format_pairs(content.get("presentation_signals", []))
     questions = comments.get("questions", [])
+    top_liked_comments = raw_data.get("top_liked_comments", [])
 
     lines = [
         f"# 视频流量复盘报告：{raw_data.get('title', state.get('video_id', '未命名视频'))}",
@@ -36,6 +37,7 @@ def render_markdown_report(state: dict[str, Any]) -> str:
         f"- 情绪分布：正向 {sentiment.get('positive', 0)}，中性 {sentiment.get('neutral', 0)}，负向 {sentiment.get('negative', 0)}",
         f"- 高频关键词：{hot_keywords or '暂无'}",
         f"- 高频问题：{'; '.join(questions) if questions else '暂无明显问题'}",
+        f"- 点赞前五评论：{_format_top_liked_comments(top_liked_comments) if top_liked_comments else '暂无'}",
         "",
         "## 4. 兴趣与呈现方式判断",
         f"- 观众兴趣选题：{', '.join(content.get('audience_interest_topics', [])) or '暂无'}",
@@ -51,3 +53,13 @@ def render_markdown_report(state: dict[str, Any]) -> str:
 
 def _format_pairs(items: list[tuple[str, int]]) -> str:
     return ", ".join(f"{key}({value})" for key, value in items)
+
+
+def _format_top_liked_comments(items: list[dict[str, Any]]) -> str:
+    formatted = []
+    for item in items[:5]:
+        text = str(item.get("text", "")).replace("\n", " ").strip()
+        if len(text) > 40:
+            text = text[:40] + "..."
+        formatted.append(f"{text}（{item.get('like', 0)}赞）")
+    return "; ".join(formatted)

@@ -10,6 +10,8 @@ dependencies = [
   "langchain",
   "langchain-tavily",
   "python-dotenv",
+  "bilibili-api-python",
+  "requests",
 ]
 
 [tool.setuptools.packages.find]
