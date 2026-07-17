@@ -1,0 +1,16 @@
+[project]
+name = "video-review-agent"
+version = "0.1.0"
+description = "LangGraph agent for short-video traffic and content review."
+requires-python = ">=3.10"
+dependencies = [
+  "langchain-deepseek",
+  "langgraph",
+  "langsmith",
+  "langchain",
+  "langchain-tavily",
+  "python-dotenv",
+]
+
+[tool.setuptools.packages.find]
+include = ["video_review_agent*"]

@@ -1,0 +1,6 @@
+langchain-deepseek
+langgraph
+langsmith
+langchain
+langchain-tavily
+python-dotenv

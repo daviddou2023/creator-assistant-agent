@@ -1,0 +1,15 @@
+{
+  "dependencies": [
+    "langchain-deepseek",
+    "langgraph",
+    "langsmith",
+    "langchain",
+    "langchain-tavily",
+    "python-dotenv",
+    "./"
+  ],
+  "graphs": {
+    "video_review_agent": "./video_review_agent/graph.py:graph"
+  },
+  "env": "./.env"
+}

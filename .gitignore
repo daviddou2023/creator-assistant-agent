@@ -1,0 +1,9 @@
+.env
+.venv/
+creator_env/
+.uv-cache/
+.uv-python/
+__pycache__/
+*.py[cod]
+reports/
+local_data/
