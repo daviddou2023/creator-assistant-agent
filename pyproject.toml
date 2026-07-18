@@ -12,6 +12,7 @@ dependencies = [
   "python-dotenv",
   "bilibili-api-python",
   "requests",
+  "qdrant-client",
 ]
 
 [tool.setuptools.packages.find]

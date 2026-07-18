@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from video_review_agent.memory import format_memories_for_report
+
 
 def render_markdown_report(state: dict[str, Any]) -> str:
     raw_data = state.get("raw_data", {})
@@ -11,6 +13,7 @@ def render_markdown_report(state: dict[str, Any]) -> str:
     comments = state.get("comment_insights", {})
     content = state.get("content_insights", {})
     recommendations = state.get("recommendations", [])
+    historical_preferences = state.get("historical_preferences", [])
 
     sentiment = comments.get("sentiment", {})
     hot_keywords = _format_pairs(comments.get("hot_keywords", []))
@@ -26,6 +29,7 @@ def render_markdown_report(state: dict[str, Any]) -> str:
         f"- 发布时间：{raw_data.get('published_at', '')}",
         f"- 分析窗口：发布后 {state.get('days_after_publish', '')} 天",
         f"- 数据区间：{metrics.get('first_snapshot', '无')} 至 {metrics.get('latest_snapshot', '无')}",
+        f"- 创作者 ID：{state.get('creator_id', 'default_creator')}",
         "",
         "## 2. 流量表现",
         f"- 阅读量：{metrics.get('views', 0):,}",
@@ -48,6 +52,7 @@ def render_markdown_report(state: dict[str, Any]) -> str:
     ]
 
     lines.extend(f"- {item}" for item in recommendations)
+    lines.extend(_render_memory_section(historical_preferences))
     return "\n".join(lines).strip() + "\n"
 
 
@@ -63,3 +68,16 @@ def _format_top_liked_comments(items: list[dict[str, Any]]) -> str:
             text = text[:40] + "..."
         formatted.append(f"{text}（{item.get('like', 0)}赞）")
     return "; ".join(formatted)
+
+
+def _render_memory_section(memories: list[dict[str, Any]]) -> list[str]:
+    if not memories:
+        return [
+            "",
+            "## 6. 历史偏好参考",
+            "- 暂无同一创作者的历史复盘经验。当前报告会在结束后写入向量记忆库。",
+        ]
+
+    lines = ["", "## 6. 历史偏好参考"]
+    lines.extend(f"- {item}" for item in format_memories_for_report(memories))
+    return lines

@@ -7,17 +7,22 @@ from typing import Any, TypedDict
 
 class VideoReviewState(TypedDict, total=False):
     video_id: str
+    creator_id: str
     source_path: str
     platform: str
     days_after_publish: int
     max_comments: int
     top_liked_comments_limit: int
+    memory_dir: str
+    memory_enabled: bool
     use_llm: bool
 
+    historical_preferences: list[dict[str, Any]]
     raw_data: dict[str, Any]
     metrics_summary: dict[str, Any]
     comment_insights: dict[str, Any]
     content_insights: dict[str, Any]
     recommendations: list[str]
+    stored_experience_id: str
     report: str
     errors: list[str]

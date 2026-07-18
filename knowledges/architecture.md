@@ -18,6 +18,7 @@
     ├── bilibili_collector.py       # 哔哩哔哩公开数据采集
     ├── analytics.py                # 规则分析层
     ├── reporting.py                # 报告渲染
+    ├── memory.py                   # 创作者历史经验向量记忆
     ├── llm.py                      # 可选 LLM 润色
     └── config.py                   # 环境变量配置
 ```
@@ -30,11 +31,13 @@
 4. `infer_content`：归纳观众更感兴趣的选题和呈现方式。
 5. `recommend`：生成下一步创作建议。
 6. `render_report`：输出 Markdown 报告，可选择用 LLM 润色。
+7. `store_memory`：复盘结束后提取核心经验，向量化写入本地 Chroma 记忆库。
 
 ## 设计原则
 
 - 数据采集、指标计算、内容分析和报告生成分层，便于替换真实平台数据源。
 - `collect_data` 当前支持 `json` mock 数据和 `bilibili` 真实数据源。
+- 复盘记忆默认写入本地 Qdrant，路径为 `memory/qdrant`，可通过命令行参数调整。
 - 默认不依赖 LLM 也能输出稳定报告。
 - LLM 只做报告润色或高级归纳，不负责不可验证的原始数据计算。
 - 所有秘钥只从环境变量读取，不写入源码和文档。

@@ -20,6 +20,7 @@ from video_review_agent.graph import run_video_review
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Generate a short-video traffic review report.")
     parser.add_argument("--video-id", default="demo-video-001", help="Video id to review.")
+    parser.add_argument("--creator-id", default="default_creator", help="Creator id for memory retrieval.")
     parser.add_argument(
         "--platform",
         choices=["json", "bilibili"],
@@ -38,6 +39,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=5,
         help="Number of top-liked Bilibili comments to record.",
+    )
+    parser.add_argument("--memory-dir", default="memory/qdrant", help="Local Qdrant memory directory.")
+    parser.add_argument(
+        "--disable-memory",
+        action="store_true",
+        help="Disable creator memory retrieval and storage for this run.",
     )
     parser.add_argument(
         "--reports-dir",
@@ -66,6 +73,9 @@ def main() -> None:
         platform=args.platform,
         max_comments=args.max_comments,
         top_liked_comments_limit=args.top_liked_comments,
+        creator_id=args.creator_id,
+        memory_dir=args.memory_dir,
+        memory_enabled=not args.disable_memory,
         use_llm=args.use_llm,
     )
 

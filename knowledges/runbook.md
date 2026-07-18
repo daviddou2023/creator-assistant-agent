@@ -32,6 +32,24 @@ python demo.py --output reports/manual/report.md
 python demo.py --platform bilibili --video-id BV1xx411c7mD --days 30 --max-comments 20 --top-liked-comments 5
 ```
 
+指定创作者 ID 并启用历史偏好记忆：
+
+```bash
+python demo.py --creator-id creator_001 --memory-dir memory/qdrant
+```
+
+如果临时不想读写向量记忆：
+
+```bash
+python demo.py --disable-memory
+```
+
+测试创作者记忆写入和检索：
+
+```bash
+python test/test_creator_memory.py
+```
+
 单独测试 B 站采集器：
 
 ```bash

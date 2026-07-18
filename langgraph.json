@@ -6,6 +6,9 @@
     "langchain",
     "langchain-tavily",
     "python-dotenv",
+    "bilibili-api-python",
+    "requests",
+    "qdrant-client",
     "./"
   ],
   "graphs": {
