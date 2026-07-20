@@ -25,7 +25,17 @@ def collect_video_data(
     max_comments: int = 50,
     top_liked_comments_limit: int = 5,
 ) -> dict[str, Any]:
-    """Collect one video record from JSON mock data or a real platform."""
+    """
+    核心入口函数：从 JSON 模拟数据源或真实的线上平台采集单条视频的记录。
+    
+    参数:
+        video_id: 视频的唯一标识符（如 BV号）。
+        source_path: JSON 模拟数据文件的本地路径（当 platform="json" 时使用）。
+        days_after_publish: 时间窗口限制，只采集视频发布后几天内的数据。
+        platform: 平台名称，支持 "json" (本地测试) 或 "bilibili" (真实接口)。
+        max_comments: 采集普通评论的最大条数。
+        top_liked_comments_limit: 采集高赞评论的最大条数。
+    """
 
     if platform == "bilibili":
         return collect_bilibili_video_data(

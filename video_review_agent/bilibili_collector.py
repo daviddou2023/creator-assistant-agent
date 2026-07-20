@@ -32,7 +32,8 @@ async def collect_bilibili_video_data_async(
     top_liked_comments_limit: int = 5,
 ) -> dict[str, Any]:
     """Fetch video metadata, latest metrics, and public comments from Bilibili."""
-
+    
+    # 尝试导入bilibili_api 库
     try:
         from bilibili_api import comment, video
     except ImportError as exc:
@@ -41,12 +42,18 @@ async def collect_bilibili_video_data_async(
             "Install it with: pip install bilibili-api-python"
         ) from exc
 
+    # 解析视频 ID 并构建 Video对象
     bili_video = _build_video(video, video_id)
+    # 获取视频的基本信息 （需要 await 等待网络请求）
     info = await bili_video.get_info()
+    # 提取统计数据
     stat = info.get("stat", {})
+    # 提取发布时间
     publish_time = datetime.fromtimestamp(int(info["pubdate"]), tz=timezone.utc)
+    # 记录当前抓取数据的时间
     captured_at = datetime.now(timezone.utc)
 
+    # 按照抓取时间排序的普通评论
     comments = await _collect_comments(
         comment_module=comment,
         aid=int(info["aid"]),
@@ -54,11 +61,14 @@ async def collect_bilibili_video_data_async(
         cutoff=publish_time + timedelta(days=days_after_publish),
         max_comments=max_comments,
     )
+
+    # 先直接通过 requests 请求 B站 公开接口获取高赞评论
     top_liked_comments = _collect_top_liked_comments_from_public_api(
         aid=int(info["aid"]),
         bvid=str(info.get("bvid", video_id)),
         limit=top_liked_comments_limit,
     )
+    # 如果直接请求获取的高赞评论数量不够，则回退使用bilibili_api 库继续抓取
     if len(top_liked_comments) < top_liked_comments_limit:
         top_liked_comments = await _collect_top_liked_comments(
             comment_module=comment,
@@ -67,6 +77,7 @@ async def collect_bilibili_video_data_async(
             existing_comments=top_liked_comments,
         )
 
+    # 将抓取到的所有数据打包成标准化的字典返回
     return {
         "platform": "bilibili",
         "video_id": info.get("bvid", video_id),
@@ -83,13 +94,13 @@ async def collect_bilibili_video_data_async(
                 "shares": int(stat.get("share", 0)),
                 "favorites": int(stat.get("favorite", 0)),
                 "coins": int(stat.get("coin", 0)),
-                "danmaku": int(stat.get("danmaku", 0)),
-                "reply": int(stat.get("reply", 0)),
+                "danmaku": int(stat.get("danmaku", 0)), # 弹幕数
+                "reply": int(stat.get("reply", 0)), # 评论数
             }
         ],
         "comments": comments,
         "top_liked_comments": top_liked_comments,
-        "raw_stat": stat,
+        "raw_stat": stat, # 保留最原始的统计数据以备不时之需
     }
 
 
@@ -100,11 +111,13 @@ async def _collect_comments(
     cutoff: datetime,
     max_comments: int,
 ) -> list[dict[str, Any]]:
+    """分页循环抓取视频评论，只保留在发布时间和截止时间内的评论"""
     comments: list[dict[str, Any]] = []
     offset = ""
     seen_offsets: set[str] = set()
 
     while len(comments) < max_comments:
+        # 使用懒加载模式按时间顺序获取评论
         payload = await comment_module.get_comments_lazy(
             aid,
             comment_module.CommentResourceType.VIDEO,
@@ -113,7 +126,9 @@ async def _collect_comments(
         )
         replies = payload.get("replies") or []
         for reply in replies:
+            # 解析每条评论的创建时间
             created_at = datetime.fromtimestamp(int(reply.get("ctime", 0)), tz=timezone.utc)
+            # 时间cutoff过滤
             if publish_time <= created_at <= cutoff:
                 comments.append(_normalize_reply(reply))
             if len(comments) >= max_comments:
@@ -135,6 +150,7 @@ async def _collect_top_liked_comments(
     limit: int = 5,
     existing_comments: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
+    """使用bilibili_api库作为备用手段获取高赞评论"""
     comments: list[dict[str, Any]] = list(existing_comments or [])
     seen_rpids: set[int] = {int(item.get("rpid", 0)) for item in comments}
 
@@ -146,6 +162,7 @@ async def _collect_top_liked_comments(
     )
     _append_unique_replies(comments, seen_rpids, first_page.get("replies") or [], limit)
 
+    # 数量不够，启动懒加载继续往后翻页抓取按点赞排序的评论
     if len(comments) < limit:
         await _append_lazy_comments(
             comment_module=comment_module,
@@ -156,6 +173,7 @@ async def _collect_top_liked_comments(
             limit=limit,
         )
 
+    # 如果还凑不齐数量，则退化为按照时间排序抓取第一页来凑数
     if len(comments) < limit:
         fallback_page = await comment_module.get_comments(
             aid,
@@ -174,6 +192,12 @@ def _collect_top_liked_comments_from_public_api(
     bvid: str,
     limit: int = 5,
 ) -> list[dict[str, Any]]:
+    """
+    直接通过 HHTP 请求 B站的公开接口 (v2/reply/main) 抓取高赞评论
+    这是一个轻量级的同步函数，避开了 bilibili_api 庞杂的依赖，速度更快更适合直接抓取高赞评论
+    
+    
+    """
     if limit <= 0:
         return []
 
@@ -195,8 +219,8 @@ def _collect_top_liked_comments_from_public_api(
                 "ps": min(max(limit, 5), 20),
             },
             headers={
-                "User-Agent": "Mozilla/5.0",
-                "Referer": f"https://www.bilibili.com/video/{bvid}",
+                "User-Agent": "Mozilla/5.0", # 伪装成普通浏览器
+                "Referer": f"https://www.bilibili.com/video/{bvid}", # B站的防盗链机制，必须带上bvid
             },
             timeout=15,
         )
@@ -248,6 +272,7 @@ def _append_unique_replies(
     replies: list[dict[str, Any]],
     limit: int,
 ) -> None:
+    """内部辅助函数：遍历传入的原始评论数据，去重格式化后追加到 comments列表中"""
     for reply in replies:
         rpid = int(reply.get("rpid", 0))
         if rpid in seen_rpids:
@@ -259,6 +284,9 @@ def _append_unique_replies(
 
 
 def _normalize_reply(reply: dict[str, Any]) -> dict[str, Any]:
+    """
+    数据清理：将B站原始庞大且嵌套深的评论字典，精简提取出我们需要的基础字段
+    """
     created_at = datetime.fromtimestamp(int(reply.get("ctime", 0)), tz=timezone.utc)
     return {
         "created_at": created_at.isoformat(),
@@ -270,6 +298,7 @@ def _normalize_reply(reply: dict[str, Any]) -> dict[str, Any]:
 
 
 def _build_video(video_module: Any, video_id: str) -> Any:
+    """识别传入的ID类型，并构造 bilibili_api对应的 Video实例"""
     normalized = video_id.strip()
     if normalized.upper().startswith("BV"):
         return video_module.Video(bvid=normalized)
