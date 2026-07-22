@@ -10,6 +10,7 @@ Run examples:
 from __future__ import annotations
 
 import argparse
+import json
 import re
 from datetime import datetime
 from pathlib import Path
@@ -60,6 +61,15 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Use an LLM to polish the final report when API environment variables are configured.",
     )
+    parser.add_argument(
+        "--require-plan-approval",
+        action="store_true",
+        help="Interrupt after generating the Plan. Intended for a long-running backend/frontend flow.",
+    )
+    parser.add_argument(
+        "--thread-id",
+        help="Optional LangGraph checkpoint thread id. Required by frontend flows that resume later.",
+    )
     return parser
 
 
@@ -77,7 +87,24 @@ def main() -> None:
         memory_dir=args.memory_dir,
         memory_enabled=not args.disable_memory,
         use_llm=args.use_llm,
+        require_plan_approval=args.require_plan_approval,
+        thread_id=args.thread_id,
     )
+
+    if "__interrupt__" in result:
+        plan = result["__interrupt__"][0].value
+        output_path = resolve_output_path(
+            video_id=args.video_id,
+            reports_dir=args.reports_dir,
+            output=args.output,
+            filename="plan.md",
+        )
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(render_interrupted_plan(plan), encoding="utf-8")
+        print(f"Plan interrupted and written to: {output_path}")
+        print(f"Thread id: {plan.get('thread_id', args.thread_id or '')}")
+        print("Resume from the same running backend with Command(resume=...).")
+        return
 
     report = result.get("report", "")
     output_path = resolve_output_path(
@@ -92,14 +119,36 @@ def main() -> None:
     print("Open that markdown file to view the full report.")
 
 
-def resolve_output_path(video_id: str, reports_dir: str, output: str | None = None) -> Path:
+def resolve_output_path(
+    video_id: str,
+    reports_dir: str,
+    output: str | None = None,
+    filename: str = "report.md",
+) -> Path:
     if output:
         return Path(output)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     safe_video_id = re.sub(r"[^A-Za-z0-9_.-]+", "-", video_id).strip("-") or "video"
     report_dir = Path(reports_dir) / f"{safe_video_id}_{timestamp}"
-    return report_dir / "report.md"
+    return report_dir / filename
+
+
+def render_interrupted_plan(plan: dict) -> str:
+    lines = [
+        f"# 待确认 Plan：{plan.get('title', plan.get('video_id', '未命名视频'))}",
+        "",
+        f"- Thread ID：{plan.get('thread_id', '')}",
+        f"- 创作者 ID：{plan.get('creator_id', '')}",
+        f"- 视频 ID：{plan.get('video_id', '')}",
+        "",
+        "## 推荐动作",
+    ]
+    lines.extend(f"- {item}" for item in plan.get("recommendations", []))
+    lines.extend(["", "## Resume Payload 示例", "```json"])
+    lines.append(json.dumps(plan.get("resume_payload_example", {}), ensure_ascii=False, indent=2))
+    lines.append("```")
+    return "\n".join(lines) + "\n"
 
 
 if __name__ == "__main__":

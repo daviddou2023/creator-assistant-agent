@@ -50,6 +50,18 @@ python demo.py --disable-memory
 python test/test_creator_memory.py
 ```
 
+测试 Plan 审批中断和恢复：
+
+```bash
+python test/test_checkpoint_interrupt.py
+```
+
+生成待确认 Plan 文件：
+
+```bash
+python demo.py --require-plan-approval --thread-id demo-plan-review
+```
+
 单独测试 B 站采集器：
 
 ```bash
@@ -67,7 +79,7 @@ python demo.py --use-llm
 ## 扩展真实数据源
 
 1. 在 `video_review_agent/collectors.py` 中新增平台采集函数或类。
-2. 保持返回字段兼容 `data_contract.md`。
+2. 保持返回字段兼容 `05_data_contract.md`。
 3. 在 `graph.py` 的 `collect_data_node` 中按配置选择数据源。
 4. 给新数据源补充小样本数据，避免只靠线上接口调试。
 
@@ -80,4 +92,4 @@ python demo.py --use-llm
 
 ## 进入项目时的约定
 
-每次开始开发前先读 `knowledges/README.md`，再根据任务阅读相关文档。新增重要能力时，同步更新 `knowledges` 目录中的说明。
+每次开始开发前先读 `knowledges/00_README.md`，再根据任务阅读相关文档。新增重要能力时，同步更新 `knowledges` 目录中的说明。

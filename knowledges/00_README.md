@@ -4,12 +4,13 @@
 
 ## 阅读顺序
 
-1. `project_overview.md`：理解项目目标、用户和能力边界。
-2. `architecture.md`：理解 LangGraph 节点、状态流转和目录结构。
-3. `langgraph_workflow.md`：查看当前 LangGraph 可视化流程和状态流转。
-4. `vector_memory.md`：理解创作者历史偏好向量记忆的写入和检索。
-5. `data_contract.md`：理解采集数据格式和后续平台接入约定。
-6. `runbook.md`：理解如何启动、调试和扩展项目。
+1. `01_project_overview.md`：理解项目目标、用户和能力边界。
+2. `02_architecture.md`：理解 LangGraph 节点、状态流转和目录结构。
+3. `03_langgraph_workflow.md`：查看当前 LangGraph 可视化流程和状态流转。
+4. `04_vector_memory.md`：理解创作者历史偏好向量记忆的写入和检索。
+5. `05_data_contract.md`：理解采集数据格式和后续平台接入约定。
+6. `06_runbook.md`：理解如何启动、调试和扩展项目。
+7. `07_checkpoint_resume.md`：理解 Plan 审批中断、检查点和恢复执行。
 
 ## 当前阶段
 

@@ -16,6 +16,8 @@ class VideoReviewState(TypedDict, total=False):
     memory_dir: str
     memory_enabled: bool
     use_llm: bool
+    require_plan_approval: bool
+    checkpoint_thread_id: str
 
     historical_preferences: list[dict[str, Any]]
     raw_data: dict[str, Any]
@@ -23,6 +25,9 @@ class VideoReviewState(TypedDict, total=False):
     comment_insights: dict[str, Any]
     content_insights: dict[str, Any]
     recommendations: list[str]
+    execution_plan: dict[str, Any]
+    plan_approved: bool
+    plan_review_notes: str
     stored_experience_id: str
     report: str
     errors: list[str]

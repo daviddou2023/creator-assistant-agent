@@ -1,4 +1,4 @@
-"""Smoke test for creator preference memory with local Chroma storage.
+"""Smoke test for creator preference memory with local Qdrant storage.
 
 Run:
     python test/test_creator_memory.py

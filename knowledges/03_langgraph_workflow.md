@@ -13,6 +13,7 @@ flowchart TD
     comments[analyze_comments<br/>分析评论情绪、关键词、问题]
     content[infer_content<br/>判断兴趣选题与呈现方式]
     recommend[recommend<br/>生成创作建议]
+    plan[plan_review<br/>生成 Plan 并可中断等待确认]
     report[render_report<br/>生成 Markdown 报告]
     store[store_memory<br/>提取核心经验并写入向量库]
     finish([END])
@@ -23,7 +24,9 @@ flowchart TD
     metrics --> comments
     comments --> content
     content --> recommend
-    recommend --> report
+    recommend --> plan
+    plan -->|approved / auto| report
+    plan -->|rejected| finish
     report --> store
     store --> finish
 ```
@@ -39,6 +42,7 @@ flowchart LR
     comment_state[comment_insights<br/>情绪分布<br/>高频关键词<br/>高频问题]
     content_state[content_insights<br/>观众兴趣选题<br/>呈现方式信号]
     rec_state[recommendations<br/>创作建议列表]
+    plan_state[execution_plan<br/>待确认 Plan<br/>plan_approved]
     report_state[report<br/>Markdown 报告]
     memory_state[stored_experience_id<br/>本次经验记忆 ID]
 
@@ -50,7 +54,8 @@ flowchart LR
     metric_state --> rec_state
     comment_state --> rec_state
     content_state --> rec_state
-    rec_state --> report_state
+    rec_state --> plan_state
+    plan_state --> report_state
     report_state --> memory_state
 ```
 
@@ -64,6 +69,7 @@ flowchart LR
 | `analyze_comments` | `analyze_comments_node` | `raw_data` | `comment_insights` | 提取评论情绪、高频关键词、高频问题和代表性评论。 |
 | `infer_content` | `infer_content_node` | `raw_data`, `comment_insights` | `content_insights` | 根据标题、描述和评论判断观众关注的选题与呈现方式。 |
 | `recommend` | `recommend_node` | `metrics_summary`, `comment_insights`, `content_insights` | `recommendations` | 把数据表现和评论洞察转化为创作建议。 |
+| `plan_review` | `plan_review_node` | `recommendations`, `metrics_summary`, `content_insights`, `historical_preferences` | `execution_plan`, `plan_approved` | 生成前端可展示的 Plan；当 `require_plan_approval=True` 时通过 LangGraph `interrupt` 暂停，等待用户确认或修改后再 resume。 |
 | `render_report` | `render_report_node` | 全量状态 | `report` | 渲染 Markdown 报告；当 `use_llm=True` 时，会调用 LLM 润色报告。 |
 | `store_memory` | `store_memory_node` | 全量状态 | `stored_experience_id` | 提取本次复盘核心经验，使用本地哈希向量函数写入 Qdrant。 |
 
@@ -71,6 +77,7 @@ flowchart LR
 
 - 当前图是线性流程，便于调试和解释。
 - 复盘开始先检索创作者历史偏好，复盘结束后再写入本次经验，避免当前报告被自己检索到。
+- `plan_review` 支持 human-in-the-loop：前端展示 Plan，用户确认或修改后恢复执行。
 - 指标计算和评论分析默认是规则逻辑，不依赖 LLM。
 - LLM 只在最后的 `render_report` 节点中作为可选润色步骤。
 - 真实平台接入时，优先替换或扩展 `collect_data` 对应的数据采集层，不改变后续节点契约。

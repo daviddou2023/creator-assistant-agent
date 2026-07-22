@@ -2,54 +2,70 @@
 
 from __future__ import annotations
 
-from langgraph.graph import END, START, StateGraph
+from typing import Any
+from uuid import uuid4
 
-# 导入analytics.py文件中自定义的数据分析模块
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import END, START, StateGraph
+from langgraph.types import Command, interrupt
+
 from video_review_agent.analytics import (
-    analyze_comments, # 评论分析
-    build_recommendations, # 构建优化建议
-    infer_content_insights, # 推断内容洞察
-    summarize_metrics, # 汇总核心指标
+    analyze_comments,
+    build_recommendations,
+    infer_content_insights,
+    summarize_metrics,
 )
 from video_review_agent.collectors import collect_video_data
 from video_review_agent.llm import polish_report_with_llm
 from video_review_agent.memory import (
-    CreatorMemoryStore, # 创作者记忆存储库（基于Qdrant）
-    build_experience_document, # 构建经验总结文档
-    build_memory_query, # 构建记忆检索查询词
+    CreatorMemoryStore,
+    build_experience_document,
+    build_memory_query,
+    format_memories_for_report,
 )
 from video_review_agent.reporting import render_markdown_report
 from video_review_agent.state import VideoReviewState
 
 
-def build_graph():
-    """构建并编译 LangGraph 状态图，定义agent执行的节点和边"""
-    
-    # 初始化状态图，指定全局状态的数据结构为 VideoReviewState
-    graph = StateGraph(VideoReviewState)
-    # 每添加一个节点代表一个具体的执行函数
-    graph.add_node("retrieve_memory", retrieve_memory_node) # 检查历史记忆
-    graph.add_node("collect_data", collect_data_node) # 采集视频数据
-    graph.add_node("summarize_metrics", summarize_metrics_node) # 统计指标汇总
-    graph.add_node("analyze_comments", analyze_comments_node) # 评论情感与内容分析
-    graph.add_node("infer_content", infer_content_node) # 视频内容深度洞察
-    graph.add_node("recommend", recommend_node) # 生成针对性建议
-    graph.add_node("render_report", render_report_node) # 渲染markdown报告
-    graph.add_node("store_memory", store_memory_node) # 将本次经验存入记忆库
+DEFAULT_CHECKPOINTER = MemorySaver()
 
-    # 添加边，定义节点的执行顺序
+
+def build_graph(checkpointer: MemorySaver | None = None):
+    """Build and compile the LangGraph workflow.
+
+    A checkpointer is required for human-in-the-loop interrupt/resume. The default
+    MemorySaver is process-local, which fits a running backend service or tests.
+    """
+
+    graph = StateGraph(VideoReviewState)
+    graph.add_node("retrieve_memory", retrieve_memory_node)
+    graph.add_node("collect_data", collect_data_node)
+    graph.add_node("summarize_metrics", summarize_metrics_node)
+    graph.add_node("analyze_comments", analyze_comments_node)
+    graph.add_node("infer_content", infer_content_node)
+    graph.add_node("recommend", recommend_node)
+    graph.add_node("plan_review", plan_review_node)
+    graph.add_node("render_report", render_report_node)
+    graph.add_node("store_memory", store_memory_node)
+
     graph.add_edge(START, "retrieve_memory")
     graph.add_edge("retrieve_memory", "collect_data")
     graph.add_edge("collect_data", "summarize_metrics")
     graph.add_edge("summarize_metrics", "analyze_comments")
     graph.add_edge("analyze_comments", "infer_content")
     graph.add_edge("infer_content", "recommend")
-    graph.add_edge("recommend", "render_report")
+    graph.add_edge("recommend", "plan_review")
+    graph.add_conditional_edges(
+        "plan_review",
+        route_after_plan_review,
+        {
+            "render_report": "render_report",
+            "end": END,
+        },
+    )
     graph.add_edge("render_report", "store_memory")
     graph.add_edge("store_memory", END)
-    
-    # 编译并返回构建好的图应用 
-    return graph.compile()
+    return graph.compile(checkpointer=checkpointer or DEFAULT_CHECKPOINTER)
 
 
 def run_video_review(
@@ -63,14 +79,17 @@ def run_video_review(
     memory_dir: str = "memory/qdrant",
     memory_enabled: bool = True,
     use_llm: bool = False,
+    require_plan_approval: bool = False,
+    thread_id: str | None = None,
 ) -> VideoReviewState:
+    """Run the video review workflow.
+
+    When ``require_plan_approval`` is true, the graph interrupts after generating
+    recommendations. Resume with ``resume_video_review`` and the same thread id.
     """
-    运行视频评估工作流的统一入口函数
-    负责初始化初始状态并启动图的执行
-    
-    """
+
+    checkpoint_thread_id = thread_id or f"video-review-{uuid4()}"
     app = build_graph()
-    # 调用app.invoke传入初始状态数据（payload），图会按照定义的边自动流转
     return app.invoke(
         {
             "video_id": video_id,
@@ -83,19 +102,39 @@ def run_video_review(
             "memory_dir": memory_dir,
             "memory_enabled": memory_enabled,
             "use_llm": use_llm,
+            "require_plan_approval": require_plan_approval,
+            "checkpoint_thread_id": checkpoint_thread_id,
             "errors": [],
-        }
+        },
+        config=build_thread_config(checkpoint_thread_id),
     )
 
-# ======== 下面是各个节点的具体实现 ========================
-# 在langgraph中，节点函数返回的字典会自动与全局的 VideoReviewState 进行合并
+
+def resume_video_review(
+    thread_id: str,
+    resume_payload: dict[str, Any] | bool | str | None = None,
+) -> VideoReviewState:
+    """Resume an interrupted graph execution with user approval or edits.
+
+    Suggested payload:
+        {"approved": True, "recommendations": ["..."], "review_notes": "..."}
+    """
+
+    app = build_graph()
+    return app.invoke(
+        Command(resume=resume_payload if resume_payload is not None else {"approved": True}),
+        config=build_thread_config(thread_id),
+    )
+
+
+def build_thread_config(thread_id: str) -> dict[str, dict[str, str]]:
+    return {"configurable": {"thread_id": thread_id}}
+
 
 def retrieve_memory_node(state: VideoReviewState) -> VideoReviewState:
-    """节点1：从向量数据库中检索该创作者的历史偏好和经验"""
     if not state.get("memory_enabled", True):
         return {"historical_preferences": []}
 
-    # 实例化记忆存储库（底层是 Qdrant 向量数据库）
     store = CreatorMemoryStore(persist_dir=state.get("memory_dir", "memory/qdrant"))
     try:
         memories = store.search_creator_preferences(
@@ -105,13 +144,10 @@ def retrieve_memory_node(state: VideoReviewState) -> VideoReviewState:
         )
     finally:
         store.close()
-
-    # 将检索到的记忆更新到全局状态中
     return {"historical_preferences": memories}
 
 
 def collect_data_node(state: VideoReviewState) -> VideoReviewState:
-    """节点2： 从真实平台或者本地 JSON获取视频数据 """
     raw_data = collect_video_data(
         video_id=state["video_id"],
         source_path=state.get("source_path", "data/sample_video_metrics.json"),
@@ -120,22 +156,18 @@ def collect_data_node(state: VideoReviewState) -> VideoReviewState:
         max_comments=state.get("max_comments", 50),
         top_liked_comments_limit=state.get("top_liked_comments_limit", 5),
     )
-    # 将采集到的原生字典存入状态的raw_data字段
     return {"raw_data": raw_data}
 
 
 def summarize_metrics_node(state: VideoReviewState) -> VideoReviewState:
-    """节点3： 基于原始数据计算播放、点赞、转化率等核心指标"""
     return {"metrics_summary": summarize_metrics(state["raw_data"])}
 
 
 def analyze_comments_node(state: VideoReviewState) -> VideoReviewState:
-    """节点4： 分析评论区数据"""
     return {"comment_insights": analyze_comments(state["raw_data"])}
 
 
 def infer_content_node(state: VideoReviewState) -> VideoReviewState:
-    """节点5： 结合原始数据和评论洞察，推断视频内容本身的优缺点"""
     return {
         "content_insights": infer_content_insights(
             state["raw_data"],
@@ -145,7 +177,6 @@ def infer_content_node(state: VideoReviewState) -> VideoReviewState:
 
 
 def recommend_node(state: VideoReviewState) -> VideoReviewState:
-    """节点6： 基于前置的所有分析结果，生成可落地的优化建议"""
     return {
         "recommendations": build_recommendations(
             state["metrics_summary"],
@@ -155,30 +186,97 @@ def recommend_node(state: VideoReviewState) -> VideoReviewState:
     }
 
 
+def plan_review_node(state: VideoReviewState) -> VideoReviewState:
+    plan = build_review_plan(state)
+    if not state.get("require_plan_approval", False):
+        return {"execution_plan": plan, "plan_approved": True}
+
+    resume_value = interrupt(plan)
+    return apply_plan_review_response(state, plan, resume_value)
+
+
+def route_after_plan_review(state: VideoReviewState) -> str:
+    return "render_report" if state.get("plan_approved", True) else "end"
+
+
 def render_report_node(state: VideoReviewState) -> VideoReviewState:
-    """节点7： 将所有结构化数据拼装并渲染成 Markdown 格式的报告"""
     report = render_markdown_report(state)
-    
-    # 如果启用了大模型，则调用 LLM 对报告进行润色和口语化处理
     if state.get("use_llm"):
         report = polish_report_with_llm(report)
     return {"report": report}
 
 
 def store_memory_node(state: VideoReviewState) -> VideoReviewState:
-    """节点8： 将本次复盘总结的经验持久化写入向量数据库，供未来参考"""
     if not state.get("memory_enabled", True):
         return {}
 
     store = CreatorMemoryStore(persist_dir=state.get("memory_dir", "memory/qdrant"))
     try:
-        # 将当前状态提炼成一条经验文档
         experience = build_experience_document(state)
-        # 写入数据库，获取该记录的 ID
         experience_id = store.add_experience(experience)
     finally:
         store.close()
     return {"stored_experience_id": experience_id}
+
+
+def build_review_plan(state: VideoReviewState) -> dict[str, Any]:
+    raw_data = state.get("raw_data", {})
+    comments = state.get("comment_insights", {})
+    content = state.get("content_insights", {})
+    return {
+        "status": "awaiting_user_approval",
+        "thread_id": state.get("checkpoint_thread_id", ""),
+        "creator_id": state.get("creator_id", "default_creator"),
+        "video_id": raw_data.get("video_id", state.get("video_id", "")),
+        "title": raw_data.get("title", ""),
+        "metrics_summary": state.get("metrics_summary", {}),
+        "comment_summary": {
+            "sentiment": comments.get("sentiment", {}),
+            "hot_keywords": comments.get("hot_keywords", []),
+            "questions": comments.get("questions", []),
+        },
+        "content_insights": content,
+        "historical_preferences": format_memories_for_report(
+            state.get("historical_preferences", [])
+        ),
+        "recommendations": state.get("recommendations", []),
+        "resume_payload_example": {
+            "approved": True,
+            "recommendations": state.get("recommendations", []),
+            "review_notes": "用户确认或修改 Plan 后的备注",
+        },
+    }
+
+
+def apply_plan_review_response(
+    state: VideoReviewState,
+    plan: dict[str, Any],
+    resume_value: dict[str, Any] | bool | str | None,
+) -> VideoReviewState:
+    updates: VideoReviewState = {"execution_plan": plan, "plan_approved": True}
+
+    if isinstance(resume_value, bool):
+        updates["plan_approved"] = resume_value
+    elif isinstance(resume_value, str):
+        updates["plan_review_notes"] = resume_value
+    elif isinstance(resume_value, dict):
+        approved = bool(resume_value.get("approved", True))
+        updates["plan_approved"] = approved
+        if isinstance(resume_value.get("recommendations"), list):
+            updates["recommendations"] = [str(item) for item in resume_value["recommendations"]]
+        if isinstance(resume_value.get("execution_plan"), dict):
+            updates["execution_plan"] = resume_value["execution_plan"]
+        elif isinstance(resume_value.get("plan"), dict):
+            updates["execution_plan"] = resume_value["plan"]
+        if resume_value.get("review_notes"):
+            updates["plan_review_notes"] = str(resume_value["review_notes"])
+    elif resume_value is None:
+        updates["plan_approved"] = True
+
+    if not updates.get("plan_approved", True):
+        updates["errors"] = state.get("errors", []) + ["Plan was rejected by the user."]
+
+    return updates
 
 
 graph = build_graph()
