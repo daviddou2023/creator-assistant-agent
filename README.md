@@ -23,3 +23,8 @@
 - 暂不直接连接真实平台账号。
 - 暂不绕过平台限制抓取数据。
 - 暂不把 API Key 写入源码或知识库，秘钥统一从本地 `.env` 或环境变量读取。
+
+
+![alt text](image.png)
+![alt text](image-1.png)
+![alt text](image-2.png)
