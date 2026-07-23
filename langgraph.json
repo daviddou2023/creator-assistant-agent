@@ -9,6 +9,7 @@
     "bilibili-api-python",
     "requests",
     "qdrant-client",
+    "flask",
     "./"
   ],
   "graphs": {

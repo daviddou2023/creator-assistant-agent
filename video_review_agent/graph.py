@@ -16,6 +16,7 @@ from video_review_agent.analytics import (
     summarize_metrics,
 )
 from video_review_agent.collectors import collect_video_data
+from video_review_agent.dashboard import build_dashboard_data
 from video_review_agent.llm import polish_report_with_llm
 from video_review_agent.memory import (
     CreatorMemoryStore,
@@ -42,6 +43,7 @@ def build_graph(checkpointer: MemorySaver | None = None):
     graph.add_node("collect_data", collect_data_node)
     graph.add_node("summarize_metrics", summarize_metrics_node)
     graph.add_node("analyze_comments", analyze_comments_node)
+    graph.add_node("data_analyst", data_analyst_node)
     graph.add_node("infer_content", infer_content_node)
     graph.add_node("recommend", recommend_node)
     graph.add_node("plan_review", plan_review_node)
@@ -52,7 +54,8 @@ def build_graph(checkpointer: MemorySaver | None = None):
     graph.add_edge("retrieve_memory", "collect_data")
     graph.add_edge("collect_data", "summarize_metrics")
     graph.add_edge("summarize_metrics", "analyze_comments")
-    graph.add_edge("analyze_comments", "infer_content")
+    graph.add_edge("analyze_comments", "data_analyst")
+    graph.add_edge("data_analyst", "infer_content")
     graph.add_edge("infer_content", "recommend")
     graph.add_edge("recommend", "plan_review")
     graph.add_conditional_edges(
@@ -165,6 +168,16 @@ def summarize_metrics_node(state: VideoReviewState) -> VideoReviewState:
 
 def analyze_comments_node(state: VideoReviewState) -> VideoReviewState:
     return {"comment_insights": analyze_comments(state["raw_data"])}
+
+
+def data_analyst_node(state: VideoReviewState) -> VideoReviewState:
+    return {
+        "dashboard_data": build_dashboard_data(
+            state["raw_data"],
+            state["metrics_summary"],
+            state["comment_insights"],
+        )
+    }
 
 
 def infer_content_node(state: VideoReviewState) -> VideoReviewState:

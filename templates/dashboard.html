@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>视频复盘 Dashboard</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}" />
+</head>
+<body>
+  <main class="shell">
+    <header class="header">
+      <div>
+        <h1>视频复盘 Dashboard</h1>
+        <p>输入视频链接，实时查看 LangGraph 节点状态、图表和最终报告。</p>
+      </div>
+      <div id="serviceStatus" class="status-pill">Idle</div>
+    </header>
+
+    <section class="panel">
+      <form id="reviewForm" class="form-grid">
+        <label>
+          视频链接
+          <input name="video_url" placeholder="https://www.bilibili.com/video/BV..." required />
+        </label>
+        <label>
+          创作者 ID
+          <input name="creator_id" value="default_creator" />
+        </label>
+        <label>
+          平台
+          <select name="platform">
+            <option value="auto">auto</option>
+            <option value="bilibili">bilibili</option>
+            <option value="json">json</option>
+          </select>
+        </label>
+        <label>
+          分析天数
+          <input name="days_after_publish" type="number" value="7" min="1" />
+        </label>
+        <label>
+          评论数
+          <input name="max_comments" type="number" value="50" min="1" />
+        </label>
+        <label>
+          高赞评论
+          <input name="top_liked_comments_limit" type="number" value="5" min="1" />
+        </label>
+        <label>
+          记忆目录
+          <input name="memory_dir" value="memory/qdrant" />
+        </label>
+        <label>
+          线程 ID
+          <input name="thread_id" placeholder="可留空自动生成" />
+        </label>
+        <label class="toggle">
+          <input name="memory_enabled" type="checkbox" />
+          <span>启用历史偏好记忆</span>
+        </label>
+        <label class="toggle">
+          <input name="use_llm" type="checkbox" />
+          <span>LLM 润色报告</span>
+        </label>
+        <label class="toggle">
+          <input name="require_plan_approval" type="checkbox" checked />
+          <span>Plan 审批中断</span>
+        </label>
+        <div class="actions">
+          <button type="submit">开始复盘</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="grid">
+      <article class="panel">
+        <div class="section-head">
+          <h2>节点状态</h2>
+          <span id="jobMeta" class="mono"></span>
+        </div>
+        <ul id="nodeList" class="node-list"></ul>
+        <div id="eventLog" class="event-log"></div>
+      </article>
+
+      <article class="panel">
+        <div class="section-head">
+          <h2>指标卡片</h2>
+        </div>
+        <div id="cards" class="cards"></div>
+      </article>
+    </section>
+
+    <section class="grid two">
+      <article class="panel">
+        <div class="section-head"><h2>热度留存走势</h2></div>
+        <canvas id="retentionChart" width="720" height="280"></canvas>
+      </article>
+      <article class="panel">
+        <div class="section-head"><h2>播放 / 点赞 / 转发</h2></div>
+        <canvas id="trendChart" width="720" height="280"></canvas>
+      </article>
+    </section>
+
+    <section class="grid two">
+      <article class="panel">
+        <div class="section-head"><h2>评论情绪</h2></div>
+        <canvas id="sentimentChart" width="720" height="280"></canvas>
+      </article>
+      <article class="panel">
+        <div class="section-head"><h2>Plan 审批</h2></div>
+        <pre id="planView" class="pre"></pre>
+        <textarea id="planNotes" class="textarea" placeholder="在这里修改 recommendations，每行一条"></textarea>
+        <div class="actions">
+          <button id="approveBtn" type="button">批准并继续</button>
+          <button id="rejectBtn" type="button" class="ghost">拒绝</button>
+        </div>
+      </article>
+    </section>
+
+    <section class="panel">
+      <div class="section-head"><h2>最终报告</h2></div>
+      <pre id="reportView" class="report"></pre>
+    </section>
+  </main>
+
+  <script src="{{ url_for('static', filename='dashboard.js') }}"></script>
+</body>
+</html>

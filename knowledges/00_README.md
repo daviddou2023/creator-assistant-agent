@@ -11,6 +11,7 @@
 5. `05_data_contract.md`：理解采集数据格式和后续平台接入约定。
 6. `06_runbook.md`：理解如何启动、调试和扩展项目。
 7. `07_checkpoint_resume.md`：理解 Plan 审批中断、检查点和恢复执行。
+8. `08_productization_dashboard.md`：理解 Flask 服务化、SSE 流式状态和 Dashboard。
 
 ## 当前阶段
 

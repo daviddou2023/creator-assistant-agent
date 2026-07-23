@@ -23,6 +23,7 @@ class VideoReviewState(TypedDict, total=False):
     raw_data: dict[str, Any]
     metrics_summary: dict[str, Any]
     comment_insights: dict[str, Any]
+    dashboard_data: dict[str, Any]
     content_insights: dict[str, Any]
     recommendations: list[str]
     execution_plan: dict[str, Any]

@@ -56,6 +56,24 @@ python test/test_creator_memory.py
 python test/test_checkpoint_interrupt.py
 ```
 
+启动 Flask 服务和 Dashboard：
+
+```bash
+python server.py
+```
+
+启动后访问：
+
+```text
+http://127.0.0.1:5000/
+```
+
+测试服务 API：
+
+```bash
+python test/test_service_api.py
+```
+
 生成待确认 Plan 文件：
 
 ```bash

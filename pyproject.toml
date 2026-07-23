@@ -13,6 +13,7 @@ dependencies = [
   "bilibili-api-python",
   "requests",
   "qdrant-client",
+  "flask",
 ]
 
 [tool.setuptools.packages.find]

@@ -7,3 +7,4 @@ python-dotenv
 bilibili-api-python
 requests
 qdrant-client
+flask
