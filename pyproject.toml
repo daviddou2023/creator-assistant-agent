@@ -14,6 +14,8 @@ dependencies = [
   "requests",
   "qdrant-client",
   "flask",
+  "redis",
+  "langgraph-checkpoint-sqlite",
 ]
 
 [tool.setuptools.packages.find]

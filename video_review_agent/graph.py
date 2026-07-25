@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 from uuid import uuid4
 
-from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
 
@@ -15,6 +14,7 @@ from video_review_agent.analytics import (
     infer_content_insights,
     summarize_metrics,
 )
+from video_review_agent.checkpointing import get_default_checkpointer
 from video_review_agent.collectors import collect_video_data
 from video_review_agent.dashboard import build_dashboard_data
 from video_review_agent.llm import polish_report_with_llm
@@ -28,14 +28,12 @@ from video_review_agent.reporting import render_markdown_report
 from video_review_agent.state import VideoReviewState
 
 
-DEFAULT_CHECKPOINTER = MemorySaver()
-
-
-def build_graph(checkpointer: MemorySaver | None = None):
+def build_graph(checkpointer: Any | None = None):
     """Build and compile the LangGraph workflow.
 
     A checkpointer is required for human-in-the-loop interrupt/resume. The default
-    MemorySaver is process-local, which fits a running backend service or tests.
+    backend is configured in ``video_review_agent.checkpointing`` and uses SQLite
+    when ``langgraph-checkpoint-sqlite`` is installed.
     """
 
     graph = StateGraph(VideoReviewState)
@@ -68,7 +66,7 @@ def build_graph(checkpointer: MemorySaver | None = None):
     )
     graph.add_edge("render_report", "store_memory")
     graph.add_edge("store_memory", END)
-    return graph.compile(checkpointer=checkpointer or DEFAULT_CHECKPOINTER)
+    return graph.compile(checkpointer=checkpointer or get_default_checkpointer())
 
 
 def run_video_review(

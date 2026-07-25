@@ -8,3 +8,5 @@ bilibili-api-python
 requests
 qdrant-client
 flask
+redis
+langgraph-checkpoint-sqlite

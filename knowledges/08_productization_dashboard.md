@@ -109,3 +109,20 @@ Content-Type: application/json
 - `top_keywords`：评论高频关键词。
 
 注意：当前“留存”是基于发布后指标快照估算的热度留存指数，不等同于平台后台的逐秒观看留存。
+## 2026-07 更新：服务运行态持久化
+
+当前 Flask 服务已新增持久化运行态：
+
+- `video_review_agent/job_store.py`: 使用 SQLite 保存任务请求、状态、Plan、结果和错误信息。
+- `video_review_agent/event_cache.py`: 使用 Redis 缓存 SSE 事件历史；本地 `auto` 模式可降级到内存。
+- `video_review_agent/checkpointing.py`: 使用 SQLite checkpointer 保存 LangGraph interrupt/resume 状态。
+
+默认数据位置：
+
+```text
+local_data/review_jobs.sqlite3
+local_data/langgraph_checkpoints.sqlite3
+memory/qdrant/
+```
+
+详细设计见：`09_persistent_runtime.md`。

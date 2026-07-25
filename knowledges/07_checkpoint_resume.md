@@ -112,3 +112,13 @@ python test/test_checkpoint_interrupt.py
 - Plan payload 包含推荐建议和 thread id。
 - 使用同一 thread id resume 后，图继续生成报告。
 - 用户修改后的 recommendations 会进入最终报告。
+## 2026-07 更新：SQLite Checkpointer
+
+当前工程已将默认 checkpointer 工厂迁移到 `video_review_agent/checkpointing.py`。
+
+- 默认配置读取 `VIDEO_REVIEW_CHECKPOINT_BACKEND=sqlite`。
+- SQLite 文件默认写入 `local_data/langgraph_checkpoints.sqlite3`。
+- 需要安装 `langgraph-checkpoint-sqlite`。
+- 如果本地环境暂未安装该依赖，代码会回退到 `MemorySaver`，保证本地开发和测试可以继续运行。
+
+相关文档见：`09_persistent_runtime.md`。

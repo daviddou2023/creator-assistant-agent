@@ -1,6 +1,4 @@
-"""Flask service for productizing the review workflow.
-将视频评估工作流（基于langgraph）产品化的 Flask服务端代码
-"""
+"""Flask service for productizing the review workflow."""
 
 from __future__ import annotations
 
@@ -12,75 +10,120 @@ import traceback
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Iterable
 from pathlib import Path
+from typing import Any, Iterable
 from urllib.parse import parse_qs, urlparse
 
 from flask import Flask, Response, jsonify, render_template, request, stream_with_context
 from langgraph.types import Command
 
+from video_review_agent.config import get_persistence_config
+from video_review_agent.event_cache import SSEEventCache, build_event_cache
 from video_review_agent.graph import build_graph, build_thread_config
+from video_review_agent.job_store import SQLiteJobStore, StoredReviewJob
 
-# 定义任务的终止状态和等待状态
+
 TERMINAL_STATUSES = {"completed", "rejected", "failed"}
 WAITING_STATUSES = {"awaiting_approval"}
 
 
 @dataclass
 class ReviewJob:
+    """Runtime view of a review job.
+
+    Durable fields are stored through ``SQLiteJobStore``. SSE event history is
+    stored through ``SSEEventCache``. Subscriber queues remain process-local
+    because they represent live HTTP connections.
     """
-    任务数据类：用于追踪每一个后台评估任务的状态、事件流和最终结果
-    """
+
     job_id: str
-    thread_id: str # ；langgraph 用于维持对话上下文的线程 ID
+    thread_id: str
     request_payload: dict[str, Any]
+    job_store: SQLiteJobStore
+    event_cache: SSEEventCache
     status: str = "queued"
-    events: list[dict[str, Any]] = field(default_factory=list) # 记录任务产生的所有事件流
+    events: list[dict[str, Any]] = field(default_factory=list)
     result: dict[str, Any] = field(default_factory=dict)
     plan: dict[str, Any] = field(default_factory=dict)
     error: str | None = None
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-
-    # 订阅者队列：每一个连接到 SSE 接口的客户端都会持有一个 Queue
-    # 任务产生新事件时，会广播给所有订阅者
     subscribers: list[queue.Queue] = field(default_factory=list, repr=False)
-
-    # 可重入锁（Rlock）：保证多线程环境下对该任务状态修改的线程安全
     lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
 
+    @classmethod
+    def from_stored(
+        cls,
+        stored: StoredReviewJob,
+        *,
+        job_store: SQLiteJobStore,
+        event_cache: SSEEventCache,
+    ) -> "ReviewJob":
+        return cls(
+            job_id=stored.job_id,
+            thread_id=stored.thread_id,
+            request_payload=stored.request_payload,
+            status=stored.status,
+            events=event_cache.get_events(stored.job_id),
+            result=stored.result,
+            plan=stored.plan,
+            error=stored.error,
+            created_at=stored.created_at,
+            updated_at=stored.updated_at,
+            job_store=job_store,
+            event_cache=event_cache,
+        )
+
+    def persist(self) -> None:
+        self.job_store.save_job(
+            job_id=self.job_id,
+            thread_id=self.thread_id,
+            status=self.status,
+            request_payload=_jsonable(self.request_payload),
+            plan=_jsonable(self.plan) or {},
+            result=_jsonable(self.result) or {},
+            error=self.error,
+            created_at=self.created_at,
+            updated_at=self.updated_at,
+        )
+
     def publish(self, event: dict[str, Any]) -> None:
-        """发布一个事件到当前任务的所有订阅者（通常是前端SSE监听器）"""
         payload = _jsonable(event)
         payload.setdefault("job_id", self.job_id)
         payload.setdefault("thread_id", self.thread_id)
         payload.setdefault("timestamp", datetime.now(timezone.utc).isoformat())
-        with self.lock: # 加锁，防止并发写入冲突
-            self.events.append(payload)
+
+        with self.lock:
             self.updated_at = payload["timestamp"]
-            # 将事件放入每一个订阅者的消息队列中
+            self.events.append(payload)
+            if len(self.events) > 500:
+                del self.events[: len(self.events) - 500]
+            self.persist()
+            try:
+                self.event_cache.append_event(self.job_id, payload)
+            except Exception:
+                pass
             for subscriber in list(self.subscribers):
                 subscriber.put(payload)
 
     def add_subscriber(self) -> queue.Queue:
-        """新增一个订阅者（前端发起SSE连接时调用），返回一个消息列表"""
         subscriber: queue.Queue = queue.Queue()
         with self.lock:
-            # 补发历史事件，让新连上来的客户端能看到之前的进度
-            for event in self.events:
+            cached_events = self.event_cache.get_events(self.job_id)
+            history = cached_events or self.events
+            for event in history:
                 subscriber.put(event)
             self.subscribers.append(subscriber)
         return subscriber
 
     def remove_subscriber(self, subscriber: queue.Queue) -> None:
-        """移除订阅者（客户端断开连接时调用）"""
         with self.lock:
             if subscriber in self.subscribers:
                 self.subscribers.remove(subscriber)
 
     def snapshot(self) -> dict[str, Any]:
-        """获取当前任务状态的快照（用于普通的GET API 请求）"""
         with self.lock:
+            last_events = self.event_cache.get_events(self.job_id) or self.events
             return {
                 "job_id": self.job_id,
                 "thread_id": self.thread_id,
@@ -91,37 +134,63 @@ class ReviewJob:
                 "plan": _jsonable(self.plan),
                 "result": _public_result(self.result),
                 "error": self.error,
-                "last_event": self.events[-1] if self.events else None,
+                "last_event": last_events[-1] if last_events else None,
             }
 
 
 class ReviewJobManager:
-    """全局后台状态管理器：负责创建、存储和恢复任务"""
-    def __init__(self) -> None:
-        self._jobs: dict[str, ReviewJob] = {} # 内存字典存储所有任务
-        self._lock = threading.RLock() # 保护任务字典的全局锁
+    """Create, persist, hydrate, and resume review jobs."""
+
+    def __init__(
+        self,
+        *,
+        job_store: SQLiteJobStore | None = None,
+        event_cache: SSEEventCache | None = None,
+    ) -> None:
+        persistence_config = get_persistence_config()
+        self.job_store = job_store or SQLiteJobStore(persistence_config.job_db_path)
+        self.event_cache = event_cache or build_event_cache(persistence_config)
+        self._jobs: dict[str, ReviewJob] = {}
+        self._lock = threading.RLock()
 
     def create_job(self, request_payload: dict[str, Any]) -> ReviewJob:
-        """创建一个全新的任务对象并存入字典"""
         job_id = str(uuid.uuid4())
         thread_id = request_payload.get("thread_id") or job_id
         payload = dict(request_payload)
         payload["thread_id"] = thread_id
-        job = ReviewJob(job_id=job_id, thread_id=thread_id, request_payload=payload)
+        job = ReviewJob(
+            job_id=job_id,
+            thread_id=thread_id,
+            request_payload=payload,
+            job_store=self.job_store,
+            event_cache=self.event_cache,
+        )
+        job.persist()
         with self._lock:
             self._jobs[job_id] = job
         return job
 
     def get_job(self, job_id: str) -> ReviewJob | None:
-        """通过ID获取任务"""
         with self._lock:
-            return self._jobs.get(job_id)
+            existing = self._jobs.get(job_id)
+            if existing is not None:
+                return existing
+
+        stored = self.job_store.get_job(job_id)
+        if stored is None:
+            return None
+
+        job = ReviewJob.from_stored(
+            stored,
+            job_store=self.job_store,
+            event_cache=self.event_cache,
+        )
+        with self._lock:
+            self._jobs[job_id] = job
+        return job
 
     def start_review(self, request_payload: dict[str, Any]) -> ReviewJob:
-        """后台任务核心：启动一个新的评估任务"""
         job = self.create_job(request_payload)
-
-        # 开启一个新的守护线程，避免阻塞 Flask 的主线程
         thread = threading.Thread(
             target=self._run_initial,
             args=(job,),
@@ -131,18 +200,17 @@ class ReviewJobManager:
         thread.start()
         return job
 
-    def resume_review(self, job_id: str, resume_payload: dict[str, Any] | bool | str | None) -> ReviewJob:
-        """
-        恢复处于挂起（等待人工审批）状态的任务
-        """
-
+    def resume_review(
+        self,
+        job_id: str,
+        resume_payload: dict[str, Any] | bool | str | None,
+    ) -> ReviewJob:
         job = self.get_job(job_id)
         if job is None:
             raise KeyError(f"Job not found: {job_id}")
         if job.status not in WAITING_STATUSES:
             raise ValueError(f"Job {job_id} is not waiting for approval.")
 
-        # 同样开启新线程去恢复执行 langgraph 图
         thread = threading.Thread(
             target=self._run_resume,
             args=(job, resume_payload),
@@ -155,7 +223,11 @@ class ReviewJobManager:
     def _run_initial(self, job: ReviewJob) -> None:
         self._run_graph(job, initial=True)
 
-    def _run_resume(self, job: ReviewJob, resume_payload: dict[str, Any] | bool | str | None) -> None:
+    def _run_resume(
+        self,
+        job: ReviewJob,
+        resume_payload: dict[str, Any] | bool | str | None,
+    ) -> None:
         job.publish({"type": "resume_started", "payload": _jsonable(resume_payload)})
         self._run_graph(job, initial=False, resume_payload=resume_payload)
 
@@ -166,22 +238,18 @@ class ReviewJobManager:
         initial: bool,
         resume_payload: dict[str, Any] | bool | str | None = None,
     ) -> None:
-        """执行 langgraph 工作流的实际引擎函数（运行在后台线程中）"""
         app = build_graph()
         job.status = "running"
         job.publish({"type": "run_started" if initial else "run_resumed", "status": job.status})
+
         try:
-            # 区分是首次运行还是带有审批数据的恢复运行
             if initial:
-                initial_state = _build_initial_state(job.request_payload)
-                # stream 模式：工作流每跑完一个节点，就会 yield一次进度
                 stream = app.stream(
-                    initial_state,
+                    _build_initial_state(job.request_payload),
                     config=build_thread_config(job.thread_id),
                     stream_mode="updates",
                 )
             else:
-                # 触发恢复执行命令，通常携带用户人工审核之后的指令
                 stream = app.stream(
                     Command(resume=resume_payload if resume_payload is not None else {"approved": True}),
                     config=build_thread_config(job.thread_id),
@@ -189,24 +257,19 @@ class ReviewJobManager:
                 )
 
             for event in stream:
-                # 捕获断点：流程跑到了需要人工确认的地方停下了
                 if "__interrupt__" in event:
                     plan = event["__interrupt__"][0].value
                     job.plan = _jsonable(plan)
-                    job.status = "awaiting_approval" # 状态变更为等待审批
+                    job.status = "awaiting_approval"
                     job.publish({"type": "interrupted", "node": "plan_review", "plan": job.plan})
-                    return # 线程结束，等待后续用户调 resume 接口唤醒
+                    return
 
-                # 解析正常节点的输出
                 node_name, delta = next(iter(event.items()))
                 delta_json = _jsonable(delta) or {}
-
-                # 将节点产生的新状态合并到任务全局结果中
                 if isinstance(delta_json, dict):
                     job.result = _merge_dicts(job.result, delta_json)
-                event_type = "node_update"
 
-                # 针对分析仪表盘节点的特殊处理
+                event_type = "node_update"
                 if (
                     node_name == "data_analyst"
                     and isinstance(delta_json, dict)
@@ -214,16 +277,8 @@ class ReviewJobManager:
                 ):
                     event_type = "dashboard_update"
 
-                # 每跑完一个节点，就将事件推送给前端 SSE 监听器
-                job.publish(
-                    {
-                        "type": event_type,
-                        "node": node_name,
-                        "data": delta_json,
-                    }
-                )
+                job.publish({"type": event_type, "node": node_name, "data": delta_json})
 
-            # 判断流程是否因为计划被拒绝而终止
             if job.result.get("plan_approved", True) is False:
                 job.status = "rejected"
                 job.publish({"type": "rejected", "result": _public_result(job.result)})
@@ -237,17 +292,18 @@ class ReviewJobManager:
             job.publish({"type": "error", "error": job.error})
 
 
-def create_app() -> Flask:
-    """Flask 应用工厂和函数"""
+def create_app(
+    *,
+    job_store: SQLiteJobStore | None = None,
+    event_cache: SSEEventCache | None = None,
+) -> Flask:
     root = Path(__file__).resolve().parent.parent
     app = Flask(
         __name__,
         template_folder=str(root / "templates"),
         static_folder=str(root / "static"),
     )
-    manager = ReviewJobManager()
-
-    # 下面是具体的 REST API 路由映射
+    manager = ReviewJobManager(job_store=job_store, event_cache=event_cache)
 
     @app.get("/")
     def dashboard() -> str:
@@ -255,16 +311,16 @@ def create_app() -> Flask:
 
     @app.get("/api/health")
     def health() -> tuple[dict[str, str], int]:
-        """健康检查接口，常用于 K8s 或者网关探活"""
-        return {"status": "ok"}, 200
+        return {
+            "status": "ok",
+            "job_store": str(manager.job_store.db_path),
+            "event_cache": manager.event_cache.backend_name,
+        }, 200
 
     @app.post("/api/reviews")
     def create_review() -> tuple[dict[str, Any], int]:
-        """创建评估任务 API"""
         payload = request.get_json(force=True, silent=False) or {}
         normalized = _normalize_request_payload(payload)
-
-        # 调用manager 启动后台线程，立刻返回 202状态码，不阻塞等待
         job = manager.start_review(normalized)
         response = {
             "job_id": job.job_id,
@@ -278,7 +334,6 @@ def create_app() -> Flask:
 
     @app.get("/api/reviews/<job_id>")
     def get_review(job_id: str) -> tuple[dict[str, Any], int]:
-        """获取特定任务状态的 API"""
         job = manager.get_job(job_id)
         if job is None:
             return {"error": "job not found"}, 404
@@ -286,7 +341,6 @@ def create_app() -> Flask:
 
     @app.post("/api/reviews/<job_id>/resume")
     def resume_review(job_id: str) -> tuple[dict[str, Any], int]:
-        """人工审批后，唤醒任务继续执行的API"""
         payload = request.get_json(force=True, silent=False) or {}
         resume_payload = payload.get("resume_payload", payload)
         try:
@@ -299,27 +353,22 @@ def create_app() -> Flask:
 
     @app.get("/api/reviews/<job_id>/events")
     def stream_review_events(job_id: str) -> Response:
-        """SSE核心：提供基于 SSE的事件流接口。前端通过 EventSource 订阅此接口。服务器将源源不断推送进度"""
         job = manager.get_job(job_id)
         if job is None:
             return jsonify({"error": "job not found"}), 404
 
         def event_stream() -> Iterable[str]:
-            # 生成一个专属的消费者队列
             subscriber = job.add_subscriber()
             try:
                 while True:
                     try:
                         event = subscriber.get(timeout=10)
-                        # 将事件包装成SSE协议规定的文本格式并 yield 推送
                         yield _format_sse(event.get("type", "message"), event)
                         if event.get("type") in TERMINAL_STATUSES:
                             break
                     except queue.Empty:
-                        # 每隔10s发一个心跳包，防止代理服务器因长期静默断开长连接
                         yield _format_sse("heartbeat", {"type": "heartbeat", "job_id": job.job_id})
             finally:
-                # 无论前端主动断开还是发生异常，都清理掉订阅者，防止内存泄露
                 job.remove_subscriber(subscriber)
 
         return Response(stream_with_context(event_stream()), mimetype="text/event-stream")
@@ -328,7 +377,6 @@ def create_app() -> Flask:
 
 
 def _normalize_request_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    """数据清洗与辅助函数"""
     video_url = str(payload.get("video_url", "")).strip()
     video_id = str(payload.get("video_id", "")).strip()
     platform = str(payload.get("platform", "auto")).strip().lower() or "auto"
@@ -353,7 +401,6 @@ def _normalize_request_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _resolve_video_target(raw_input: str, platform: str) -> tuple[str, str]:
-    """从输入的 URL 或原始字符串中智能提取目标平台和视频 ID（支持 B站）。"""
     if platform == "json":
         return "json", raw_input or "demo-video-001"
 
@@ -372,7 +419,6 @@ def _resolve_video_target(raw_input: str, platform: str) -> tuple[str, str]:
 
 
 def _extract_bvid(text: str) -> str | None:
-    """使用正则表达式或 URL 参数解析来寻找 B 站视频 BV 号。"""
     match = re.search(r"(BV[0-9A-Za-z]{10,})", text)
     if match:
         return match.group(1)
@@ -388,14 +434,12 @@ def _extract_bvid(text: str) -> str | None:
 
 
 def _build_initial_state(request_payload: dict[str, Any]) -> dict[str, Any]:
-    """构建图执行的初始状态字典。"""
     state = dict(request_payload)
     state.setdefault("errors", [])
     return state
 
 
 def _merge_dicts(base: dict[str, Any], incoming: dict[str, Any]) -> dict[str, Any]:
-    """深度合并两个字典（用于合并 LangGraph 节点的增量输出到最终结果）。"""
     merged = dict(base)
     for key, value in incoming.items():
         if isinstance(value, dict) and isinstance(merged.get(key), dict):
