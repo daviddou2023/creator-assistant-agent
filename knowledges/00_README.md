@@ -1,27 +1,26 @@
 # 项目知识库入口
 
-每次进入本项目，请先阅读本文档，再按任务需要阅读同目录下的专题文档。
+进入项目先读本文件，再按任务读取专题文档。
 
-## 阅读顺序
+## 当前架构
 
-1. `01_project_overview.md`: 理解项目目标、用户和能力边界。
-2. `02_architecture.md`: 理解 LangGraph 节点、状态流转和目录结构。
-3. `03_langgraph_workflow.md`: 查看当前 LangGraph 可视化流程和状态流转。
-4. `04_vector_memory.md`: 理解创作者历史偏好向量记忆的写入和检索。
-5. `05_data_contract.md`: 理解采集数据格式和后续平台接入约定。
-6. `06_runbook.md`: 理解如何启动、调试和扩展项目。
-7. `07_checkpoint_resume.md`: 理解 Plan 审批中断、检查点和恢复执行。
-8. `08_productization_dashboard.md`: 理解 Flask 服务化、SSE 流式状态和 Dashboard。
-9. `09_persistent_runtime.md`: 理解 SQLite 任务持久化、Redis SSE 事件缓存和 LangGraph SQLite checkpointer。
+面向短视频创作者的证据驱动复盘助手。用户提交带 BV 号的视频链接和自然语言问题，LangGraph 生成有限任务清单，按需获取公开指标、评论或已确认经验，整理证据后由模型提出解释与可验证假设。任务失败时最多重规划两轮。报告反馈可以触发重跑；用户确认后才写入本地经验库。
 
-## 当前阶段
+## 文档
 
-项目当前是一个可本地运行的短视频复盘 Agent 工程：支持 B 站真实数据采集、LangGraph 多节点分析、人在环路 Plan 审批、Qdrant 创作者记忆、Flask REST API、SSE 进度推送、Dashboard 图表展示，以及服务运行态持久化。
+- `01_project_overview.md`: 目标和边界。
+- `02_architecture.md`: 组件和职责。
+- `03_langgraph_workflow.md`: 计划、执行、核验和反馈路径。
+- `04_experience_hypotheses.md`: 本地经验与假设存储。
+- `05_data_contract.md`: 数据字段与平台限制。
+- `06_runbook.md`: 安装、运行和配置。
+- `07_checkpoint_resume.md`: 报告纠偏和后续验证。
+- `08_productization_dashboard.md`: Dashboard 与 API。
+- `09_persistent_runtime.md`: 当前进程状态和本地经验文件。
 
-常用命令：
+## 常用命令
 
-```bash
-python test/test_bilibili_collector.py --bvid BV1xx411c7mD --top-liked-comments 5
-python demo.py --platform bilibili --video-id BV1xx411c7mD --top-liked-comments 5
-python server.py
+```powershell
+.\creator_env\Scripts\python.exe demo.py --platform bilibili --video-id BV1xx411c7mD --question "为什么点赞率高但评论互动偏少？"
+.\creator_env\Scripts\python.exe server.py
 ```

@@ -3,126 +3,78 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>视频复盘 Dashboard</title>
+  <title>视频证据复盘</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}" />
 </head>
 <body>
   <main class="shell">
-    <header class="header">
+    <header class="topbar">
       <div>
-        <h1>视频复盘 Dashboard</h1>
-        <p>输入视频链接，实时查看 LangGraph 节点状态、图表和最终报告。</p>
+        <h1>视频证据复盘</h1>
+        <div id="serviceStatus" class="status">待开始</div>
       </div>
-      <div id="serviceStatus" class="status-pill">Idle</div>
+      <span id="jobMeta" class="mono"></span>
     </header>
 
-    <section class="panel">
-      <form id="reviewForm" class="form-grid">
-        <label>
-          视频链接
-          <input name="video_url" placeholder="https://www.bilibili.com/video/BV..." required />
-        </label>
-        <label>
-          创作者 ID
-          <input name="creator_id" value="default_creator" />
-        </label>
-        <label>
-          平台
-          <select name="platform">
-            <option value="auto">auto</option>
-            <option value="bilibili">bilibili</option>
-            <option value="json">json</option>
-          </select>
-        </label>
-        <label>
-          分析天数
-          <input name="days_after_publish" type="number" value="7" min="1" />
-        </label>
-        <label>
-          评论数
-          <input name="max_comments" type="number" value="50" min="1" />
-        </label>
-        <label>
-          高赞评论
-          <input name="top_liked_comments_limit" type="number" value="5" min="1" />
-        </label>
-        <label>
-          记忆目录
-          <input name="memory_dir" value="memory/qdrant" />
-        </label>
-        <label>
-          线程 ID
-          <input name="thread_id" placeholder="可留空自动生成" />
-        </label>
-        <label class="toggle">
-          <input name="memory_enabled" type="checkbox" />
-          <span>启用历史偏好记忆</span>
-        </label>
-        <label class="toggle">
-          <input name="use_llm" type="checkbox" />
-          <span>LLM 润色报告</span>
-        </label>
-        <label class="toggle">
-          <input name="require_plan_approval" type="checkbox" checked />
-          <span>Plan 审批中断</span>
-        </label>
-        <div class="actions">
-          <button type="submit">开始复盘</button>
+    <form id="reviewForm" class="request-layout">
+      <div class="request-main">
+        <label for="videoUrl">视频链接或 BV 号</label>
+        <input id="videoUrl" name="video_url" placeholder="https://www.bilibili.com/video/BV..." required />
+        <label for="question">你想查明什么？</label>
+        <textarea id="question" name="user_question" rows="3" placeholder="例如：为什么点赞率较高，但评论互动偏少？" required></textarea>
+        <div class="form-row">
+          <label>创作者 ID<input name="creator_id" value="default_creator" /></label>
+          <label>数据源
+            <select name="platform"><option value="auto">自动识别</option><option value="bilibili">哔哩哔哩</option><option value="json">本地样例</option></select>
+          </label>
+          <label>发布后天数<input name="days_after_publish" type="number" value="30" min="1" /></label>
+          <label>评论样本上限<input name="max_comments" type="number" value="50" min="1" /></label>
         </div>
-      </form>
+        <button type="submit" class="primary">开始分析</button>
+      </div>
+      <aside class="hypothesis-picker">
+        <div class="section-title">
+          <h2>待验证假设</h2>
+          <button id="refreshHypotheses" type="button" class="quiet">刷新</button>
+        </div>
+        <div id="hypothesisList" class="hypothesis-list"><p class="muted">输入创作者 ID 后加载</p></div>
+      </aside>
+    </form>
+
+    <section class="execution" aria-label="执行计划">
+      <div class="section-title"><h2>计划与执行</h2><span id="taskCount" class="muted"></span></div>
+      <ol id="todoList" class="todo-list"></ol>
+      <div id="eventLog" class="event-log" aria-live="polite"></div>
     </section>
 
-    <section class="grid">
-      <article class="panel">
-        <div class="section-head">
-          <h2>节点状态</h2>
-          <span id="jobMeta" class="mono"></span>
-        </div>
-        <ul id="nodeList" class="node-list"></ul>
-        <div id="eventLog" class="event-log"></div>
-      </article>
-
-      <article class="panel">
-        <div class="section-head">
-          <h2>指标卡片</h2>
-        </div>
-        <div id="cards" class="cards"></div>
-      </article>
+    <section class="results">
+      <div>
+        <div class="section-title"><h2>取数结果</h2></div>
+        <table class="data-table"><tbody id="metricsBody"><tr><td class="muted">尚无数据</td></tr></tbody></table>
+        <div id="commentSignals" class="signals"></div>
+      </div>
+      <div>
+        <div class="section-title"><h2>解释与证据</h2></div>
+        <div id="explanations" class="explanations"><p class="muted">分析完成后显示结论、证据、置信度和限制。</p></div>
+        <div class="section-title hypothesis-heading"><h2>新假设</h2></div>
+        <div id="newHypotheses" class="explanations"></div>
+      </div>
     </section>
 
-    <section class="grid two">
-      <article class="panel">
-        <div class="section-head"><h2>热度留存走势</h2></div>
-        <canvas id="retentionChart" width="720" height="280"></canvas>
-      </article>
-      <article class="panel">
-        <div class="section-head"><h2>播放 / 点赞 / 转发</h2></div>
-        <canvas id="trendChart" width="720" height="280"></canvas>
-      </article>
-    </section>
-
-    <section class="grid two">
-      <article class="panel">
-        <div class="section-head"><h2>评论情绪</h2></div>
-        <canvas id="sentimentChart" width="720" height="280"></canvas>
-      </article>
-      <article class="panel">
-        <div class="section-head"><h2>Plan 审批</h2></div>
-        <pre id="planView" class="pre"></pre>
-        <textarea id="planNotes" class="textarea" placeholder="在这里修改 recommendations，每行一条"></textarea>
-        <div class="actions">
-          <button id="approveBtn" type="button">批准并继续</button>
-          <button id="rejectBtn" type="button" class="ghost">拒绝</button>
-        </div>
-      </article>
-    </section>
-
-    <section class="panel">
-      <div class="section-head"><h2>最终报告</h2></div>
+    <section class="report-section">
+      <div class="section-title"><h2>复盘报告</h2></div>
       <pre id="reportView" class="report"></pre>
+      <div id="feedbackArea" class="feedback" hidden>
+        <label for="correction">需要纠正或补充的内容</label>
+        <textarea id="correction" rows="3" placeholder="例如：这条是长视频，请结合视频时长解释"></textarea>
+        <div class="actions">
+          <button id="rerunFeedback" type="button" class="secondary">提交纠偏并重跑</button>
+          <button id="confirmReport" type="button" class="primary">报告准确，确认并沉淀经验</button>
+        </div>
+        <p id="feedbackStatus" class="muted" aria-live="polite"></p>
+      </div>
     </section>
   </main>
-
   <script src="{{ url_for('static', filename='dashboard.js') }}"></script>
 </body>
 </html>

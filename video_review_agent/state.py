@@ -7,28 +7,28 @@ from typing import Any, TypedDict
 
 class VideoReviewState(TypedDict, total=False):
     video_id: str
+    user_question: str
+    user_feedback: str
     creator_id: str
     source_path: str
     platform: str
     days_after_publish: int
     max_comments: int
     top_liked_comments_limit: int
-    memory_dir: str
-    memory_enabled: bool
-    use_llm: bool
-    require_plan_approval: bool
-    checkpoint_thread_id: str
-
-    historical_preferences: list[dict[str, Any]]
+    selected_hypotheses: list[dict[str, Any]]
+    todos: list[dict[str, Any]]
+    replan_attempts: int
+    failed_tasks: list[str]
+    observations: list[str]
     raw_data: dict[str, Any]
-    metrics_summary: dict[str, Any]
+    selected_metrics: dict[str, Any]
+    comments: list[dict[str, Any]]
     comment_insights: dict[str, Any]
-    dashboard_data: dict[str, Any]
-    content_insights: dict[str, Any]
-    recommendations: list[str]
-    execution_plan: dict[str, Any]
-    plan_approved: bool
-    plan_review_notes: str
-    stored_experience_id: str
+    historical_experiences: list[dict[str, Any]]
+    data_limitations: list[str]
+    explanations: list[dict[str, Any]]
+    hypotheses: list[dict[str, Any]]
+    followup_validations: list[dict[str, Any]]
+    evidence: list[str]
+    summary: str
     report: str
-    errors: list[str]

@@ -1,12 +1,7 @@
 langchain-deepseek
 langgraph
-langsmith
 langchain
-langchain-tavily
 python-dotenv
 bilibili-api-python
 requests
-qdrant-client
 flask
-redis
-langgraph-checkpoint-sqlite

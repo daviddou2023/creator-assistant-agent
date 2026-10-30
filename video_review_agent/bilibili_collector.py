@@ -12,6 +12,7 @@ def collect_bilibili_video_data(
     days_after_publish: int,
     max_comments: int = 50,
     top_liked_comments_limit: int = 5,
+    include_comments: bool = True,
 ) -> dict[str, Any]:
     """Sync wrapper for fetching one Bilibili video's metrics and comments."""
 
@@ -21,6 +22,7 @@ def collect_bilibili_video_data(
             days_after_publish=days_after_publish,
             max_comments=max_comments,
             top_liked_comments_limit=top_liked_comments_limit,
+            include_comments=include_comments,
         )
     )
 
@@ -30,6 +32,7 @@ async def collect_bilibili_video_data_async(
     days_after_publish: int,
     max_comments: int = 50,
     top_liked_comments_limit: int = 5,
+    include_comments: bool = True,
 ) -> dict[str, Any]:
     """Fetch video metadata, latest metrics, and public comments from Bilibili."""
     
@@ -54,28 +57,32 @@ async def collect_bilibili_video_data_async(
     captured_at = datetime.now(timezone.utc)
 
     # 按照抓取时间排序的普通评论
-    comments = await _collect_comments(
-        comment_module=comment,
-        aid=int(info["aid"]),
-        publish_time=publish_time,
-        cutoff=publish_time + timedelta(days=days_after_publish),
-        max_comments=max_comments,
-    )
-
-    # 先直接通过 requests 请求 B站 公开接口获取高赞评论
-    top_liked_comments = _collect_top_liked_comments_from_public_api(
-        aid=int(info["aid"]),
-        bvid=str(info.get("bvid", video_id)),
-        limit=top_liked_comments_limit,
-    )
-    # 如果直接请求获取的高赞评论数量不够，则回退使用bilibili_api 库继续抓取
-    if len(top_liked_comments) < top_liked_comments_limit:
-        top_liked_comments = await _collect_top_liked_comments(
-            comment_module=comment,
-            aid=int(info["aid"]),
-            limit=top_liked_comments_limit,
-            existing_comments=top_liked_comments,
-        )
+    comments = []
+    top_liked_comments = []
+    collection_errors = []
+    if include_comments:
+        try:
+            comments = await _collect_comments(
+                comment_module=comment,
+                aid=int(info["aid"]),
+                publish_time=publish_time,
+                cutoff=publish_time + timedelta(days=days_after_publish),
+                max_comments=max_comments,
+            )
+            top_liked_comments = _collect_top_liked_comments_from_public_api(
+                aid=int(info["aid"]),
+                bvid=str(info.get("bvid", video_id)),
+                limit=top_liked_comments_limit,
+            )
+            if len(top_liked_comments) < top_liked_comments_limit:
+                top_liked_comments = await _collect_top_liked_comments(
+                    comment_module=comment,
+                    aid=int(info["aid"]),
+                    limit=top_liked_comments_limit,
+                    existing_comments=top_liked_comments,
+                )
+        except Exception as exc:
+            collection_errors.append(f"comments: {type(exc).__name__}: {exc}")
 
     # 将抓取到的所有数据打包成标准化的字典返回
     return {
@@ -100,6 +107,7 @@ async def collect_bilibili_video_data_async(
         ],
         "comments": comments,
         "top_liked_comments": top_liked_comments,
+        "collection_errors": collection_errors,
         "raw_stat": stat, # 保留最原始的统计数据以备不时之需
     }
 

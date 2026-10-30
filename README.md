@@ -1,30 +1,32 @@
-# 项目说明
+# 证据驱动短视频复盘助手
 
-## 项目目标
+面向短视频创作者的 LangGraph 应用。提交视频链接/BV 号和自然语言问题后，系统按需采集公开指标和评论，计算互动指标，生成带证据、置信度、限制和可验证假设的复盘。
 
-本项目用于构建一个帮助短视频创作者做内容复盘的 agent 助手。它需要抓取视频发布后一段时间内的阅读量、点赞量、转发量和观众评论，生成视频流量报告，并进一步分析观众更感兴趣的选题内容和呈现方式，最后给出下一步创作建议。
+## 运行
 
-## 核心用户
+```powershell
+.\creator_env\Scripts\python.exe -m pip install -r requirements.txt
+.\creator_env\Scripts\python.exe server.py
+```
 
-- 短视频创作者：希望知道视频为什么涨、为什么没涨，以及下一条怎么做。
-- 内容运营人员：希望批量复盘账号内容，沉淀选题和呈现方式经验。
-- MCN 或团队负责人：希望用统一报告评估内容表现。
+打开 `http://127.0.0.1:5000/`。
 
-## MVP 能力（minimum viable product）
+CLI 示例：
 
-- 按视频 ID 和发布时间窗口读取数据。
-- 汇总阅读量、点赞量、转发量、评论量和互动率。
-- 从评论中提取情绪、高频关键词、高频问题和代表性评论。
-- 判断观众关注的选题方向和呈现方式。
-- 输出 Markdown 格式的视频流量复盘报告。
+```powershell
+.\creator_env\Scripts\python.exe demo.py --platform bilibili --video-id BV1xx411c7mD --question "为什么点赞率高但评论互动偏少？"
+```
 
-## 暂不处理
+本地样例可使用 `--platform json --video-id demo-video-001`。
 
-- 暂不直接连接真实平台账号。
-- 暂不绕过平台限制抓取数据。
-- 暂不把 API Key 写入源码或知识库，秘钥统一从本地 `.env` 或环境变量读取。
+## 架构摘要
 
+`Plan -> Execute -> Verify -> Re-plan（失败时最多两轮）-> Report -> 用户反馈 -> 经验沉淀/纠偏重跑`。
 
-![alt text](image.png)
-![alt text](image-1.png)
-![alt text](image-2.png)
+用户确认的经验保存在 `local_data/experiences.json`，使用本地词项检索，不使用 Qdrant。任务和 SSE 事件在进程内存中，重启服务后丢失。服务不依赖 SQLite 或 Redis。
+
+## 数据限制
+
+B 站公开接口能获取部分累计互动指标和公开评论，通常没有历史快照，也不提供 5 秒跳出率、平均播放时长、完播率或真实观看留存曲线。报告会标记这些缺失；单条视频观察不能证明因果关系。
+
+LLM 通过 `.env` 中的 `DEEPSEEK_API_KEY` 用于任务规划和证据解释，不做报告润色。配置说明见 [项目知识库](knowledges/00_README.md)。

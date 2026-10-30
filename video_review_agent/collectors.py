@@ -24,6 +24,7 @@ def collect_video_data(
     platform: str = "json",
     max_comments: int = 50,
     top_liked_comments_limit: int = 5,
+    include_comments: bool = True,
 ) -> dict[str, Any]:
     """
     核心入口函数：从 JSON 模拟数据源或真实的线上平台采集单条视频的记录。
@@ -43,6 +44,7 @@ def collect_video_data(
             days_after_publish=days_after_publish,
             max_comments=max_comments,
             top_liked_comments_limit=top_liked_comments_limit,
+            include_comments=include_comments,
         )
 
     if platform != "json":
@@ -66,7 +68,7 @@ def collect_video_data(
         item
         for item in video.get("comments", [])
         if publish_time <= _parse_datetime(item["created_at"]) <= cutoff
-    ]
+    ] if include_comments else []
 
     return {**video, "metric_snapshots": snapshots, "comments": comments}
 
