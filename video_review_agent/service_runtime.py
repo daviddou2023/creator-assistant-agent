@@ -217,7 +217,7 @@ def _extract_bvid(value: str) -> str | None:
 
 
 def _public_result(state: dict[str, Any]) -> dict[str, Any]:
-    keys = ("report", "todos", "selected_metrics", "comment_insights", "explanations", "hypotheses", "followup_validations", "evidence", "summary", "data_limitations", "observations", "historical_experiences")
+    keys = ("report", "todos", "selected_metrics", "comment_insights", "comment_counts", "explanations", "hypotheses", "followup_validations", "evidence", "summary", "data_limitations", "observations", "historical_experiences")
     return {key: state[key] for key in keys if key in state}
 
 

@@ -24,6 +24,7 @@ class VideoReviewState(TypedDict, total=False):
     selected_metrics: dict[str, Any]
     comments: list[dict[str, Any]]
     comment_insights: dict[str, Any]
+    comment_counts: dict[str, Any]
     historical_experiences: list[dict[str, Any]]
     data_limitations: list[str]
     explanations: list[dict[str, Any]]

@@ -121,11 +121,12 @@ function showMetrics(result) {
   if (!Object.keys(values).length) metricsBody.innerHTML = '<tr><td class="muted">没有可展示的指标</td></tr>';
 
   const comments = result.comment_insights;
-  if (!comments) return;
+  if (!comments && !result.comment_counts?.requested) return;
+  const counts = result.comment_counts || {};
   const summary = document.createElement('p');
-  summary.textContent = `评论样本 ${comments.total || 0} 条 · 正向 ${comments.sentiment?.positive || 0} · 中性 ${comments.sentiment?.neutral || 0} · 负向 ${comments.sentiment?.negative || 0}`;
+  summary.textContent = `平台 ${counts.platform_total ?? '未知'} 条 · 抓取 ${counts.fetched || 0} 条 · 有效样本 ${counts.effective || 0} 条 · 清洗移除 ${counts.removed_empty || 0} 条空评论、${counts.removed_duplicate || 0} 条重复评论`;
   const keywords = document.createElement('p');
-  keywords.textContent = `高频信号：${(comments.hot_keywords || []).map(([word, count]) => `${word} (${count})`).join('、') || '暂无'}`;
+  keywords.textContent = `评论情绪：正向 ${comments?.sentiment?.positive || 0} · 中性 ${comments?.sentiment?.neutral || 0} · 负向 ${comments?.sentiment?.negative || 0}；高频信号：${(comments?.hot_keywords || []).map(([word, count]) => `${word} (${count})`).join('、') || '暂无'}`;
   commentSignals.replaceChildren(summary, keywords);
 }
 
@@ -180,8 +181,8 @@ function connectStream(jobId) {
     const payload = JSON.parse(event.data);
     addLog(`完成步骤：${payload.node}`);
     if (payload.data?.todos) showTodos(payload.data.todos);
-    if (payload.data?.selected_metrics || payload.data?.comment_insights) {
-      showMetrics({ selected_metrics: payload.data.selected_metrics || {}, comment_insights: payload.data.comment_insights });
+    if (payload.data?.selected_metrics || payload.data?.comment_insights || payload.data?.comment_counts) {
+      showMetrics({ selected_metrics: payload.data.selected_metrics || {}, comment_insights: payload.data.comment_insights, comment_counts: payload.data.comment_counts });
     }
     if (payload.data?.explanations) showExplanations(payload.data);
     if (payload.data?.report) reportView.textContent = payload.data.report;

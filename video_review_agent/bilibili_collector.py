@@ -62,9 +62,9 @@ async def collect_bilibili_video_data_async(
     collection_errors = []
     if include_comments:
         try:
-            comments = await _collect_comments(
-                comment_module=comment,
+            comments = _collect_comments_from_public_api(
                 aid=int(info["aid"]),
+                bvid=str(info.get("bvid", video_id)),
                 publish_time=publish_time,
                 cutoff=publish_time + timedelta(days=days_after_publish),
                 max_comments=max_comments,
@@ -108,46 +108,68 @@ async def collect_bilibili_video_data_async(
         "comments": comments,
         "top_liked_comments": top_liked_comments,
         "collection_errors": collection_errors,
+        "comment_collection": {
+            "platform_total": int(stat.get("reply", 0)),
+            "fetched_count": len(comments),
+            "sample_limit": max_comments,
+        },
         "raw_stat": stat, # 保留最原始的统计数据以备不时之需
     }
 
 
-async def _collect_comments(
-    comment_module: Any,
+def _collect_comments_from_public_api(
     aid: int,
+    bvid: str,
     publish_time: datetime,
     cutoff: datetime,
     max_comments: int,
 ) -> list[dict[str, Any]]:
-    """分页循环抓取视频评论，只保留在发布时间和截止时间内的评论"""
-    comments: list[dict[str, Any]] = []
-    offset = ""
-    seen_offsets: set[str] = set()
+    """Fetch time-ordered public comments using Bilibili's numeric page cursor."""
+    if max_comments <= 0:
+        return []
+    import requests
 
+    comments: list[dict[str, Any]] = []
+    next_cursor = 0
+    seen_cursors: set[int] = set()
     while len(comments) < max_comments:
-        # 使用懒加载模式按时间顺序获取评论
-        payload = await comment_module.get_comments_lazy(
-            aid,
-            comment_module.CommentResourceType.VIDEO,
-            offset=offset,
-            order=comment_module.OrderType.TIME,
+        response = requests.get(
+            "https://api.bilibili.com/x/v2/reply/main",
+            params={
+                "jsonp": "jsonp",
+                "next": next_cursor,
+                "type": 1,
+                "oid": aid,
+                "mode": 2,
+                "plat": 1,
+                "ps": min(max_comments - len(comments), 20),
+            },
+            headers={
+                "User-Agent": "Mozilla/5.0",
+                "Referer": f"https://www.bilibili.com/video/{bvid}",
+            },
+            timeout=15,
         )
-        replies = payload.get("replies") or []
+        response.raise_for_status()
+        payload = response.json()
+        if payload.get("code") != 0:
+            raise RuntimeError(f"Bilibili comment API error: {payload.get('message', payload.get('code'))}")
+
+        data = payload.get("data") or {}
+        replies = data.get("replies") or []
         for reply in replies:
-            # 解析每条评论的创建时间
             created_at = datetime.fromtimestamp(int(reply.get("ctime", 0)), tz=timezone.utc)
-            # 时间cutoff过滤
             if publish_time <= created_at <= cutoff:
                 comments.append(_normalize_reply(reply))
-            if len(comments) >= max_comments:
-                break
+                if len(comments) >= max_comments:
+                    break
 
-        cursor = payload.get("cursor") or {}
-        next_offset = str(cursor.get("next", ""))
-        if cursor.get("is_end") or not next_offset or next_offset in seen_offsets:
+        cursor = data.get("cursor") or {}
+        next_value = int(cursor.get("next", 0) or 0)
+        if cursor.get("is_end") or not replies or next_value in seen_cursors:
             break
-        seen_offsets.add(next_offset)
-        offset = next_offset
+        seen_cursors.add(next_value)
+        next_cursor = next_value
 
     return comments
 

@@ -100,6 +100,13 @@ def execute_node(state: VideoReviewState) -> VideoReviewState:
     selected_metrics: dict[str, Any] = {"values": {}, "unavailable": []}
     comments: list[dict[str, Any]] = []
     comment_insights: dict[str, Any] = {}
+    comment_counts: dict[str, Any] = {
+        "requested": wants_comments,
+        "platform_total": None,
+        "fetched": 0,
+        "effective": 0,
+        "sample_limit": state.get("max_comments", 50),
+    }
     history = list(state.get("historical_experiences", []))
 
     try:
@@ -113,6 +120,8 @@ def execute_node(state: VideoReviewState) -> VideoReviewState:
             include_comments=wants_comments,
         )
         selected_metrics = get_metrics_by_keys(raw_data, metric_keys)
+        comment_counts.update(raw_data.get("comment_collection", {}))
+        comment_counts["fetched"] = int(comment_counts.get("fetched_count", 0))
         for error in raw_data.get("collection_errors", []):
             observations.append(error)
     except Exception as exc:
@@ -134,6 +143,9 @@ def execute_node(state: VideoReviewState) -> VideoReviewState:
     for item in todos:
         if item.get("type") == "clean_comments":
             comments, cleaning = clean_comments(raw_data.get("comments", []))
+            comment_counts["effective"] = len(comments)
+            comment_counts["removed_empty"] = cleaning["removed_empty"]
+            comment_counts["removed_duplicate"] = cleaning["removed_duplicate"]
             item["status"] = "completed" if comments else "empty"
             item["cleaning"] = cleaning
             if not comments and wants_comments:
@@ -153,6 +165,7 @@ def execute_node(state: VideoReviewState) -> VideoReviewState:
         "selected_metrics": selected_metrics,
         "comments": comments,
         "comment_insights": comment_insights,
+        "comment_counts": comment_counts,
         "historical_experiences": history,
         "todos": todos,
         "failed_tasks": failed,
@@ -221,6 +234,7 @@ def verify_node(state: VideoReviewState) -> VideoReviewState:
         "metrics": metrics,
         "metric_growth": state.get("selected_metrics", {}).get("growth", {}),
         "comments": comments,
+        "comment_counts": state.get("comment_counts", {}),
         "historical_experiences": state.get("historical_experiences", []),
         "selected_hypotheses": state.get("selected_hypotheses", []),
         "user_feedback": state.get("user_feedback", ""),
@@ -262,6 +276,17 @@ def report_node(state: VideoReviewState) -> VideoReviewState:
     )
     if not metrics:
         lines.append("- 没有取得可用指标。")
+    comment_counts = state.get("comment_counts", {})
+    lines.extend(["", "## 评论采样口径"])
+    if comment_counts.get("requested"):
+        lines.extend([
+            f"- 平台评论总数：{comment_counts.get('platform_total', '未知')}",
+            f"- 本次抓取：{comment_counts.get('fetched', 0)} 条（上限 {comment_counts.get('sample_limit', '未知')}）",
+            f"- 清洗后有效样本：{comment_counts.get('effective', 0)} 条",
+            f"- 清洗移除：空评论 {comment_counts.get('removed_empty', 0)} 条，重复评论 {comment_counts.get('removed_duplicate', 0)} 条",
+        ])
+    else:
+        lines.append("- 本次分析计划未要求抓取评论。")
     lines.extend(["", "## 解释与证据"])
     for item in state.get("explanations", []):
         lines.extend([f"### {item.get('claim', '观察结果')}", f"置信度：{item.get('confidence', 'low')}"])
@@ -298,7 +323,11 @@ def _data_limitations(raw_data: dict[str, Any], selected: dict[str, Any], wants_
     if len(snapshots) < 2:
         limitations.append("本次只有一个累计指标快照，无法计算发布后的增长趋势。")
     if wants_comments:
-        limitations.append(f"评论分析基于采集样本（{len(raw_data.get('comments', []))} 条），不代表平台评论全集。")
+        collection = raw_data.get("comment_collection", {})
+        limitations.append(
+            f"评论分析基于抓取样本（{collection.get('fetched_count', len(raw_data.get('comments', [])))} 条），"
+            f"平台显示 {collection.get('platform_total', '未知')} 条，不代表已采集全集。"
+        )
     return limitations
 
 
