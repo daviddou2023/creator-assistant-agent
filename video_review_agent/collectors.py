@@ -70,7 +70,14 @@ def collect_video_data(
         if publish_time <= _parse_datetime(item["created_at"]) <= cutoff
     ] if include_comments else []
 
-    return {**video, "metric_snapshots": snapshots, "comments": comments}
+    collection = dict(video.get("comment_collection", {}))
+    collection["fetched_count"] = len(comments)
+    return {
+        **video,
+        "metric_snapshots": snapshots,
+        "comments": comments,
+        "comment_collection": collection,
+    }
 
 
 def _parse_datetime(value: str) -> datetime:

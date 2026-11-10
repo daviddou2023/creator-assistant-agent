@@ -1,0 +1,41 @@
+{
+  "videos": [
+    {
+      "video_id": "eval-007",
+      "title": "固定评测案例 07",
+      "description": "用于 low_comments 场景的离线评测快照。",
+      "published_at": "2026-10-01T00:00:00Z",
+      "metric_snapshots": [
+        {
+          "captured_at": "2026-10-10T00:00:00Z",
+          "views": 10700,
+          "likes": 870,
+          "shares": 47,
+          "favorites": 97,
+          "coins": 32,
+          "danmaku": 37,
+          "reply": 2
+        }
+      ],
+      "comments": [
+        {
+          "comment_id": "c01",
+          "text": "这个内容后面还会继续讲吗？",
+          "created_at": "2026-10-02T00:00:00Z",
+          "like": 0
+        },
+        {
+          "comment_id": "c02",
+          "text": "讲得很清楚，学到了。",
+          "created_at": "2026-10-03T00:00:00Z",
+          "like": 1
+        }
+      ],
+      "comment_collection": {
+        "platform_total": 2,
+        "fetched_count": 2,
+        "sample_limit": 50
+      }
+    }
+  ]
+}

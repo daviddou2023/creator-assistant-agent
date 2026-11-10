@@ -1,0 +1,59 @@
+{
+  "videos": [
+    {
+      "video_id": "eval-016",
+      "title": "固定评测案例 16",
+      "description": "用于 unavailable_metrics 场景的离线评测快照。",
+      "published_at": "2026-10-01T00:00:00Z",
+      "metric_snapshots": [
+        {
+          "captured_at": "2026-10-10T00:00:00Z",
+          "views": 11600,
+          "likes": 960,
+          "shares": 56,
+          "favorites": 106,
+          "coins": 41,
+          "danmaku": 46,
+          "reply": 8
+        }
+      ],
+      "comments": [
+        {
+          "comment_id": "c01",
+          "text": "这个内容后面还会继续讲吗？",
+          "created_at": "2026-10-02T00:00:00Z",
+          "like": 0
+        },
+        {
+          "comment_id": "c02",
+          "text": "讲得很清楚，学到了。",
+          "created_at": "2026-10-03T00:00:00Z",
+          "like": 1
+        },
+        {
+          "comment_id": "c03",
+          "text": "希望能补充一个实际案例",
+          "created_at": "2026-10-04T00:00:00Z",
+          "like": 2
+        },
+        {
+          "comment_id": "c04",
+          "text": "这个方法我试过，确实有用",
+          "created_at": "2026-10-05T00:00:00Z",
+          "like": 3
+        },
+        {
+          "comment_id": "c05",
+          "text": "听起来不错，想看后续",
+          "created_at": "2026-10-06T00:00:00Z",
+          "like": 4
+        }
+      ],
+      "comment_collection": {
+        "platform_total": 8,
+        "fetched_count": 5,
+        "sample_limit": 50
+      }
+    }
+  ]
+}

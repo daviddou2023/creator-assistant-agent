@@ -1,0 +1,28 @@
+{
+  "videos": [
+    {
+      "video_id": "eval-021",
+      "title": "固定评测案例 21",
+      "description": "用于 no_comments 场景的离线评测快照。",
+      "published_at": "2026-10-01T00:00:00Z",
+      "metric_snapshots": [
+        {
+          "captured_at": "2026-10-10T00:00:00Z",
+          "views": 12100,
+          "likes": 1010,
+          "shares": 61,
+          "favorites": 111,
+          "coins": 46,
+          "danmaku": 51,
+          "reply": 17
+        }
+      ],
+      "comments": [],
+      "comment_collection": {
+        "platform_total": 17,
+        "fetched_count": 0,
+        "sample_limit": 50
+      }
+    }
+  ]
+}
